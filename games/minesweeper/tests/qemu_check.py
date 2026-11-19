@@ -17,7 +17,9 @@ P2_PATTERN = re.compile(r"P2-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{5}")
 
 # Match Screen::fieldX, fieldY, width and height.
 FIELD_X, FIELD_Y, FIELD_WIDTH, FIELD_HEIGHT = 2, 5, 72, 30
-SIZE, CELL_WIDTH, CELL_HEIGHT = 8, 4, 2
+SIZE = 8
+BOARD_X, BOARD_Y = FIELD_X + 2, FIELD_Y + 1
+BOARD_WIDTH, BOARD_HEIGHT = FIELD_WIDTH - 4, FIELD_HEIGHT - 2
 CLOSED = "▪"
 
 
@@ -27,17 +29,22 @@ def click(x, y, right=False):
     return mouse_bytes(button, x, y) + mouse_bytes(button, x, y, True)
 
 
+def cell_size(x, y):
+    """Return the span between adjacent proportional tile boundaries."""
+    return ((x + 1) * BOARD_WIDTH // SIZE - x * BOARD_WIDTH // SIZE,
+            (y + 1) * BOARD_HEIGHT // SIZE - y * BOARD_HEIGHT // SIZE)
+
+
 def cell_position(x, y):
-    """Return the top-left console coordinates of a tile on the 8x8 board."""
-    left = FIELD_X + (FIELD_WIDTH - CELL_WIDTH * SIZE) // 2
-    top = FIELD_Y + (FIELD_HEIGHT - CELL_HEIGHT * SIZE) // 2
-    return left + CELL_WIDTH * x, top + CELL_HEIGHT * y
+    """Return the top-left console coordinates of a scaled tile."""
+    return BOARD_X + x * BOARD_WIDTH // SIZE, BOARD_Y + y * BOARD_HEIGHT // SIZE
 
 
 def cell_marker(x, y):
     """Return the console position of the glyph inside a tile."""
     column, row = cell_position(x, y)
-    return column + (CELL_WIDTH - 2) // 2, row
+    width, height = cell_size(x, y)
+    return column + (width - 2) // 2, row + (max(1, height - 1) - 1) // 2
 
 
 def cell_click(x, y, right=False, dx=0, dy=0):
@@ -108,7 +115,8 @@ def main():
         assert model.text().splitlines()[5][77:98].startswith("Цена ошибки: 0")
         assert "Динамиты: 10" in model.text() and "Enter/ЛКМ" not in model.text()
 
-        session.send(cell_click(7, 7, right=True, dx=CELL_WIDTH - 1, dy=CELL_HEIGHT - 1), "Банданы: 1")
+        width, height = cell_size(7, 7)
+        session.send(cell_click(7, 7, right=True, dx=width - 1, dy=height - 1), "Банданы: 1")
         assert board(model)[-1] == "▼" and "Цена ошибки: 0" in model.text()
         flag_x, flag_y = cell_marker(7, 7)
         assert model.cells[flag_y][flag_x][1] == 167  # Theme::red
@@ -153,11 +161,12 @@ def main():
         session.send(b"r", "Поле: 8x8")
         session.wait("Банданы: 0", condition=lambda m: board(m) == legacy_board)
         session.send(cell_click(4, 1, right=True), "Банданы: 1")
-        session.send(cell_click(3, 2), "Партия окончена")
+        session.send(cell_click(3, 2), "Не заметил растяжку")
         choose(session, "Посмотреть все поле", "К результату")
         check_review(session, detonated=True)
         mark_x, mark_y = cell_position(4, 1)
-        assert model.cells[mark_y][mark_x + CELL_WIDTH - 1][0] == "!"
+        _, glyph_row = cell_marker(4, 1)
+        assert model.cells[glyph_row][mark_x + cell_size(4, 1)[0] - 1][0] == "!"
         choose(session, "К результату", "Посмотреть все поле")
         choose(session, "Посмотреть все поле", "К результату")
         restart_fresh(session)
@@ -173,7 +182,8 @@ def main():
         session.send(b"ss\r", "К результату")
         check_review(session)
         mark_x, mark_y = cell_position(3, 1)
-        assert model.cells[mark_y][mark_x + CELL_WIDTH - 1][0] == "▼"
+        _, glyph_row = cell_marker(3, 1)
+        assert model.cells[glyph_row][mark_x + cell_size(3, 1)[0] - 1][0] == "▼"
         restart_fresh(session)
         session.send(b"q", "Выбери игру")
     print("PASS: ESP32/QEMU, price of error, P2 replay, win and loss, full board review, fresh keys.")

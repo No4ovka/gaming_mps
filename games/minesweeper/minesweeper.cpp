@@ -54,21 +54,18 @@ int Minesweeper::index(Point position) const {
 }
 
 Minesweeper::Layout Minesweeper::boardLayout() const {
-    constexpr int cellWidths[] = {4, 4, 4, 3, 3};
-    constexpr int cellHeights[] = {2, 2, 2, 2, 1};
-    const int level = (size_ - 8) / 2;
-    const int width = cellWidths[level];
-    const int height = cellHeights[level];
-    return {{(Screen::width - size_ * width) / 2, (Screen::height - size_ * height) / 2},
-            width, height};
+    constexpr int horizontalMargin = 2;
+    constexpr int verticalMargin = 1;
+    return {{horizontalMargin, verticalMargin}, Screen::width - 2 * horizontalMargin,
+            Screen::height - 2 * verticalMargin};
 }
 
 Minesweeper::Point Minesweeper::pointerCell(const Input& input) const {
     const Layout layout = boardLayout();
     const int x = input.x - layout.origin.x;
     const int y = input.y - layout.origin.y;
-    if (x < 0 || x >= size_ * layout.cellWidth || y < 0 || y >= size_ * layout.cellHeight) return {};
-    return {x / layout.cellWidth, y / layout.cellHeight};
+    if (x < 0 || x >= layout.width || y < 0 || y >= layout.height) return {};
+    return {((x + 1) * size_ - 1) / layout.width, ((y + 1) * size_ - 1) / layout.height};
 }
 
 template<typename Action>
@@ -232,21 +229,25 @@ void Minesweeper::drawCell(Screen& screen, const Layout& layout, Point position,
         background = Theme::wood;
     }
 
-    const int x = layout.origin.x + layout.cellWidth * position.x;
-    const int y = layout.origin.y + layout.cellHeight * position.y;
-    const int faceWidth = layout.cellWidth - 1;
-    screen.fill(x, y, faceWidth, 1, background);
-    screen.cell(x + (faceWidth - 1) / 2, y, foreground, background, glyph);
-    if (finished && cell.flag) screen.text(x + faceWidth, y, cell.mine ? "▼" : "!", Theme::red);
-    else if (selected) screen.text(x + faceWidth, y, "│", Theme::muted);
+    const int x = layout.origin.x + position.x * layout.width / size_;
+    const int y = layout.origin.y + position.y * layout.height / size_;
+    const int width = (position.x + 1) * layout.width / size_ - position.x * layout.width / size_;
+    const int height = (position.y + 1) * layout.height / size_ - position.y * layout.height / size_;
+    const int faceWidth = width - 1;
+    const int faceHeight = std::max(1, height - 1);
+    const int glyphY = y + (faceHeight - 1) / 2;
+    screen.fill(x, y, faceWidth, faceHeight, background);
+    screen.cell(x + (faceWidth - 1) / 2, glyphY, foreground, background, glyph);
+    if (finished && cell.flag) screen.text(x + faceWidth, glyphY, cell.mine ? "▼" : "!", Theme::red);
+    else if (selected) screen.text(x + faceWidth, glyphY, "│", Theme::muted);
 }
 
 void Minesweeper::draw(Screen& screen) const {
     const Layout layout = boardLayout();
     const int left = layout.origin.x;
     const int top = layout.origin.y;
-    const int width = size_ * layout.cellWidth;
-    const int height = size_ * layout.cellHeight;
+    const int width = layout.width;
+    const int height = layout.height;
     screen.frame(left - 1, top - 1, width + 2, height + 2, Theme::border);
     screen.text(left + (width - 19) / 2, top - 1, " ДИНАМИТНАЯ ДОЛИНА ", Theme::accent);
     const Point selection = contains(hover_) ? hover_ : cursor_;

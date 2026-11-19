@@ -46,7 +46,8 @@ bool Menu::onGamePage() const {
            page_ == Page::BoardReview;
 }
 const char* Menu::resultTitle() const {
-    if (result_.state == State::Lost) return "Партия окончена";
+    if (result_.state == State::Lost)
+        return game_ == GameId::Minesweeper ? "Не заметил растяжку" : "Партия окончена";
     return game_ == GameId::Minesweeper ? "Поле зачищено" : "Уровень пройден";
 }
 std::string Menu::currentCode() const {

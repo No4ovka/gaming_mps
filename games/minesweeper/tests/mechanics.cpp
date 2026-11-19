@@ -4,6 +4,7 @@
 #include "menu.h"
 #include "minesweeper.h"
 #include "screen.h"
+#include <algorithm>
 #include <array>
 #include <cstdlib>
 #include <iostream>
@@ -17,21 +18,28 @@
     } \
 } while (false)
 
-/** @brief Ожидаемая геометрия на экране 72×30. */
+/** @brief Прямоугольник клетки в области 68×28, включая разделители. */
 struct Tile {
+    int x;
+    int y;
     int width;
     int height;
 };
-static constexpr Tile tiles[] = {{4, 2}, {4, 2}, {4, 2}, {3, 2}, {3, 1}};
 static constexpr std::string_view closed = "▪";
+
+/** @brief Вычисляет ожидаемые границы по доле игровой области. */
+static Tile tileAt(int size, int x, int y) {
+    constexpr int width = Screen::width - 4;
+    constexpr int height = Screen::height - 2;
+    const int left = x * width / size;
+    const int top = y * height / size;
+    return {2 + left, 1 + top, (x + 1) * width / size - left, (y + 1) * height / size - top};
+}
 
 /** @brief Возвращает событие мыши в заданной точке клетки. */
 static Input mouse(InputType type, int size, int x, int y, int dx = 0, int dy = 0) {
-    const auto tile = tiles[(size - 8) / 2];
-    const int left = (Screen::width - size * tile.width) / 2;
-    const int top = (Screen::height - size * tile.height) / 2;
-    return {type, static_cast<std::int16_t>(left + tile.width * x + dx),
-            static_cast<std::int16_t>(top + tile.height * y + dy)};
+    const auto tile = tileAt(size, x, y);
+    return {type, static_cast<std::int16_t>(tile.x + dx), static_cast<std::int16_t>(tile.y + dy)};
 }
 
 /** @brief Возвращает изображение модуля из общего рендерера. */
@@ -43,8 +51,10 @@ static std::string frame(const Minesweeper& game) {
 
 /** @brief Считывает глиф в центре плитки, учитывая одноколоночный UTF-8. */
 static std::string_view cellGlyph(std::string_view frame, int size, int x, int y, bool sideMark = false) {
-    const auto tile = tiles[(size - 8) / 2];
-    const auto marker = mouse(InputType::None, size, x, y, sideMark ? tile.width - 1 : (tile.width - 2) / 2);
+    const auto tile = tileAt(size, x, y);
+    const int glyphRow = (std::max(1, tile.height - 1) - 1) / 2;
+    const auto marker = mouse(InputType::None, size, x, y,
+                              sideMark ? tile.width - 1 : (tile.width - 2) / 2, glyphRow);
     std::size_t byte = 0;
     for (int row = 0; row < Screen::fieldY + marker.y; ++row) {
         byte = frame.find('\n', byte) + 1;
@@ -295,22 +305,33 @@ static void auditChord() {
     CHECK(cellGlyph(lost, 8, 4, 1, true) == "!");
 }
 
-/** @brief Проверяет расширенные зоны клика и отбрасывание щелчков по раме. */
+/** @brief Проверяет все позиции и края растянутых клеток без пропусков и перекрытий. */
 static void auditHitboxes() {
     Minesweeper game;
     for (std::uint32_t level = 1; level <= 5; ++level) {
         Settings settings;
         settings.level = level;
         const int size = 6 + 2 * static_cast<int>(level);
-        const auto tile = tiles[level - 1];
-        for (const int x : {0, size - 1}) {
-            for (const int y : {0, size - 1}) {
+        game.start(settings);
+        for (int y = 0; y < Screen::height; ++y) {
+            for (int x = 0; x < Screen::width; ++x) {
+                if (x >= 2 && x < Screen::width - 2 && y >= 1 && y < Screen::height - 1) continue;
+                game.handle({InputType::PointerLeft, static_cast<std::int16_t>(x), static_cast<std::int16_t>(y)});
+            }
+        }
+        CHECK(game.result().firstX == -1);
+        for (int y = 0; y < size; ++y) {
+            for (int x = 0; x < size; ++x) {
+                const auto tile = tileAt(size, x, y);
+                for (int dy = 0; dy < tile.height; ++dy) {
+                    for (int dx = 0; dx < tile.width; ++dx) {
+                        game.start(settings);
+                        game.handle(mouse(InputType::PointerRight, size, x, y, dx, dy));
+                        CHECK(cellGlyph(frame(game), size, x, y) == "▼");
+                        CHECK(frame(game).find("Банданы: 1") != std::string::npos);
+                    }
+                }
                 game.start(settings);
-                game.handle(mouse(InputType::PointerLeft, size, size, y));
-                game.handle(mouse(InputType::PointerLeft, size, x, size));
-                game.handle(mouse(InputType::PointerLeft, size, -1, y, tile.width - 1));
-                game.handle(mouse(InputType::PointerLeft, size, x, -1, 0, tile.height - 1));
-                CHECK(game.result().firstX == -1);
                 game.handle(mouse(InputType::PointerLeft, size, x, y, tile.width - 1, tile.height - 1));
                 CHECK(game.result().firstX == x && game.result().firstY == y);
             }
