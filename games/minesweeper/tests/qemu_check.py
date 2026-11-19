@@ -109,7 +109,7 @@ def main():
         session = Session(qemu)
         model = session.model
         session.wait("Выбери игру", 15)
-        session.send(click(30, 17), "Меняет долю мин")
+        session.send(click(30, 17), "Меняет долю динамита")
         session.send(b"ss\r", "Поле: 8x8")
         assert board(model) == CLOSED * 64
         assert "Код после первого открытия" in model.text()

@@ -4,6 +4,8 @@ $ErrorActionPreference = 'Stop'
 if ($LASTEXITCODE -ne 0) { throw 'Keyboard layout verification failed.' }
 & "$env:IDF_PYTHON_ENV_PATH\Scripts\python.exe" "$PSScriptRoot\..\tests\test_clipboard.py"
 if ($LASTEXITCODE -ne 0) { throw 'Clipboard protocol verification failed.' }
+& "$env:IDF_PYTHON_ENV_PATH\Scripts\python.exe" "$PSScriptRoot\..\tests\test_transport.py"
+if ($LASTEXITCODE -ne 0) { throw 'UART transport verification failed.' }
 & "$env:IDF_PYTHON_ENV_PATH\Scripts\python.exe" "$PSScriptRoot\..\tests\native_output.py"
 if ($LASTEXITCODE -ne 0) { throw 'Native Windows output verification failed.' }
 & "$env:IDF_PYTHON_ENV_PATH\Scripts\python.exe" "$PSScriptRoot\smoke.py"
@@ -13,3 +15,6 @@ if ($LASTEXITCODE -ne 0) { throw 'Native Windows console verification failed.' }
 
 & "$env:IDF_PYTHON_ENV_PATH\Scripts\python.exe" "$PSScriptRoot\..\games\tetris\tests\qemu_smoke.py"
 if ($LASTEXITCODE -ne 0) { throw 'Tetris QEMU verification failed.' }
+
+& "$env:IDF_PYTHON_ENV_PATH\Scripts\python.exe" "$PSScriptRoot\..\games\minesweeper\tests\qemu_check.py"
+if ($LASTEXITCODE -ne 0) { throw 'Minesweeper QEMU verification failed.' }

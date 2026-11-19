@@ -77,6 +77,20 @@ class Session:
     def falling(self):
         return {(x, y) for x, y, glyph in self.field() if glyph == "◆"}
 
+    def measure_drop_interval(self, expected_ms):
+        """Time consecutive automatic steps of the same piece using UART frames."""
+        points = self.falling()
+        assert len(points) == 4
+        observed = []
+        for _ in range(7):
+            points = {(x, y + 1) for x, y in points}
+            self.wait(lambda: self.falling() == points, "one automatic drop without keyboard input")
+            observed.append(time.monotonic())
+        interval_ms = round(1000 * (observed[-1] - observed[0]) / (len(observed) - 1))
+        # Allow for the 50 ms render cadence and the time to deliver a UART frame.
+        assert abs(interval_ms - expected_ms) <= 100, (expected_ms, interval_ms)
+        return interval_ms
+
     def check_preview(self, visible):
         frame = self.screen.text()
         assert ("СЛЕДУЮЩАЯ" in frame) == visible
@@ -106,7 +120,7 @@ class Session:
 
 
 def play_demo(session, input_code, emitted_code):
-    """Play a reproducible challenge through both rewards and the first level transition."""
+    """Play through both rewards and measure gravity after the first level transition."""
     session.click_option("Играть по коду")
     session.text("Введи код друга")
     session.key(input_code.encode("ascii") + b"\r")
@@ -135,6 +149,7 @@ def play_demo(session, input_code, emitted_code):
     session.text("Уровень: 2")
     session.text("Линии: 10")
     session.screen.snapshot(SCREENS, "tetris-level-2")
+    level_two_ms = session.measure_drop_interval(863)
     session.key(b"r")
     session.text("Убери 1 ряд")
     session.text("Уровень: 1")
@@ -142,6 +157,7 @@ def play_demo(session, input_code, emitted_code):
     assert session.code() == emitted_code
     session.key(b"q")
     session.text("Выбери игру")
+    return level_two_ms
 
 
 def main():
@@ -171,6 +187,7 @@ def main():
         session.key(b"s")
         session.wait(lambda: session.falling() == {(x, y + 1) for x, y in initial}, "a soft drop")
         session.screen.snapshot(SCREENS, "tetris-easy")
+        easy_ms = session.measure_drop_interval(1500)
         session.key(b"q")
         session.text("Выбери игру")
 
@@ -178,12 +195,14 @@ def main():
         session.check_preview(visible=True)
         assert session.code() != original_code
         session.screen.snapshot(SCREENS, "tetris-normal")
+        normal_ms = session.measure_drop_interval(950)
         session.key(b"q")
         session.text("Выбери игру")
 
         session.start(b"d", "Сложная")
         session.check_preview(visible=False)
         session.screen.snapshot(SCREENS, "tetris-hard")
+        hard_ms = session.measure_drop_interval(500)
         hard_code = session.code()
         for _ in range(20):
             session.key(b"s" * 16)
@@ -197,7 +216,11 @@ def main():
         assert session.code() == hard_code
         session.key(b"q")
         session.text("Выбери игру")
-        play_demo(session, DEMO_P2, DEMO_P2)
+        level_two_ms = play_demo(session, DEMO_P2, DEMO_P2)
+        assert easy_ms > normal_ms > hard_ms, (easy_ms, normal_ms, hard_ms)
+        assert level_two_ms < normal_ms, (normal_ms, level_two_ms)
+        print(f"PASS: measured automatic drop at {easy_ms}, {normal_ms}, {hard_ms} ms; "
+              f"medium level 2 at {level_two_ms} ms")
         print("PASS: P2 challenge and deterministic replay")
     print("PASS: ESP32 UART, all difficulties, preview on easy/normal, pause, replay, loss, orders and level 2")
 
