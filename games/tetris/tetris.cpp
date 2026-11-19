@@ -64,6 +64,8 @@ constexpr std::uint32_t doubleReward = 150; ///< Награда за две ли
 constexpr std::uint32_t goldReward = 250; ///< Награда за золотую жилу.
 constexpr std::uint32_t streakReward = 200; ///< Награда за две очистки подряд.
 constexpr std::uint32_t comboRate = 50; ///< Очки за каждый шаг серии сверх первой очистки.
+constexpr int cardWidth = 20; ///< Ширина вывески и афиши внутри общего поля.
+constexpr int cardGap = 4; ///< Отступ карточек от логической доски.
 constexpr std::array<std::string_view, 3> difficultyNames{
     "Лёгкая", "Средняя", "Сложная"
 }; ///< Названия сложности на панели.
@@ -134,20 +136,25 @@ void Tetris::draw(Screen& screen) const {
     drawContract(screen);
 
     screen.panelText(0, "* КАССА САЛУНА *", Theme::accent);
-    screen.panelNumber(2, "Счёт:", result_.score);
-    screen.panelNumber(4, "Линии:", lines_);
-    screen.panelNumber(6, "Уровень:", result_.level);
-    screen.panelNumber(7, "До уровня:", linesPerLevel - lines_ % linesPerLevel, Theme::muted);
-    screen.panelText(9, "Сложность", Theme::muted);
-    screen.panelText(10, difficultyNames[static_cast<unsigned>(difficulty_)]);
-    screen.panelNumber(12, "Серия:", combo_, combo_ > 1 ? Theme::accent : Theme::text);
-    screen.panelNumber(13, "Наград:", rewards_);
+    screen.panelText(1, "─────────────────────", Theme::border);
+    screen.panelNumber(3, "Счёт:", result_.score);
+    screen.panelNumber(5, "Линии:", lines_);
+    screen.panelNumber(7, "Уровень:", result_.level);
+    screen.panelNumber(9, "До уровня:", linesPerLevel - lines_ % linesPerLevel, Theme::muted);
+    screen.panelText(12, "Сложность", Theme::muted);
+    screen.panelText(13, difficultyNames[static_cast<unsigned>(difficulty_)]);
+    screen.panelText(16, "─────────────────────", Theme::border);
+    screen.panelNumber(18, "Серия:", combo_, combo_ > 1 ? Theme::accent : Theme::text);
+    screen.panelNumber(20, "Наград:", rewards_);
     if (noticeMs_ != 0) {
         constexpr std::array<std::string_view, 6> messages{
             "", "Очистка!", "Темп вырос!", "Награда выплачена", "Жила взята!", "Время жилы вышло"
         };
-        screen.panelText(16, messages[static_cast<unsigned>(notice_)],
-                         notice_ == Notice::Missed ? Theme::orange : Theme::accent);
+        const int left = Screen::boardX(columns);
+        const int statusRow = Screen::boardY(rows) + rows + 2;
+        screen.fill(left - 2, statusRow, 2 * columns + 4, 1, Theme::wood);
+        screen.text(left, statusRow, messages[static_cast<unsigned>(notice_)],
+                    notice_ == Notice::Missed ? Theme::white : Theme::text, Theme::wood);
     }
 }
 
@@ -155,9 +162,11 @@ void Tetris::drawField(Screen& screen) const {
     const int left = Screen::boardX(columns);
     const int top = Screen::boardY(rows);
     const bool spark = notice_ != Notice::Missed && noticeMs_ > 700 && (noticeMs_ / 90) % 2 == 1;
+    const Color rail = spark ? Theme::accent : Theme::border;
+    screen.text(left + 7, top - 3, "ШАХТА", Theme::accent);
+    screen.frame(left - 2, top - 1, 2 * columns + 4, rows + 2, rail);
     for (int y = 0; y < rows; ++y) {
         const bool brace = y % 5 == 4;
-        const Color rail = spark ? Theme::accent : Theme::border;
         screen.text(left - 2, top + y, brace ? "+│" : "▒│", rail, Theme::wood);
         screen.text(left + 2 * columns, top + y, brace ? "│+" : "│▒", rail, Theme::wood);
         for (int x = 0; x < columns; ++x) {
@@ -192,28 +201,31 @@ void Tetris::drawPiece(Screen& screen, const Piece& piece, int left, int top, bo
 }
 
 void Tetris::drawSaloon(Screen& screen) const {
-    screen.fill(0, 1, 14, 3, Theme::wood);
-    screen.text(1, 1, "* ТРИ СТВОЛА", Theme::white, Theme::wood);
-    screen.text(1, 2, "    САЛУН", Theme::white, Theme::wood);
-    screen.text(1, 5, "СЛЕДУЮЩАЯ", Theme::accent);
-    screen.frame(1, 6, 12, 5, Theme::border);
-    drawPiece(screen, Piece{next_, 0, 0, 0}, 3, 7);
-    screen.text(1, 12, "A/D  сдвиг", Theme::muted);
-    screen.text(1, 13, "W    поворот", Theme::muted);
-    screen.text(1, 14, "S    вниз", Theme::muted);
-    screen.text(1, 16, "    _", Theme::green);
-    screen.text(1, 17, " | | |", Theme::green);
-    screen.text(1, 18, " |_| | |", Theme::green);
-    screen.text(1, 19, "___| |_|__", Theme::muted);
+    const int left = Screen::boardX(columns) - cardGap - cardWidth;
+    const int top = Screen::boardY(rows);
+    screen.fill(left, top, cardWidth, 4, Theme::wood);
+    screen.text(left + 7, top + 1, "САЛУН", Theme::white, Theme::wood);
+    screen.text(left + 3, top + 2, "* ТРИ СТВОЛА *", Theme::white, Theme::wood);
+    screen.text(left + 4, top + 6, "СЛЕДУЮЩАЯ", Theme::accent);
+    screen.frame(left, top + 7, cardWidth, 6, Theme::border);
+    drawPiece(screen, Piece{next_, 0, 0, 0}, left + (cardWidth - 2 * maskSide) / 2, top + 9);
+    screen.text(left + 2, top + 14, "A/D  сдвиг", Theme::muted);
+    screen.text(left + 2, top + 15, "W    поворот", Theme::muted);
+    screen.text(left + 2, top + 16, "S    вниз", Theme::muted);
+    screen.text(left + 4, top + 19, "     _", Theme::green);
+    screen.text(left + 4, top + 20, "  | | |", Theme::green);
+    screen.text(left + 4, top + 21, "  |_| | |", Theme::green);
+    screen.text(left + 4, top + 22, "____| |_|____", Theme::muted);
 }
 
 void Tetris::drawContract(Screen& screen) const {
-    constexpr int left = 38;
-    screen.fill(left, 2, 14, 10, Theme::paper);
-    screen.fill(left, 2, 14, 2, Theme::wood);
-    screen.text(left + 2, 2, "* РОЗЫСК *", Theme::white, Theme::wood);
+    const int left = Screen::boardX(columns) + 2 * columns + cardGap;
+    const int top = Screen::boardY(rows);
+    screen.fill(left, top, cardWidth, 14, Theme::paper);
+    screen.fill(left, top, cardWidth, 3, Theme::wood);
+    screen.text(left + 5, top + 1, "* РОЗЫСК *", Theme::white, Theme::wood);
     const auto line = [&](int row, std::string_view text, Color color = Theme::ink) {
-        screen.text(left + 1, row, text, color, Theme::paper);
+        screen.text(left + 2, top + row, text, color, Theme::paper);
     };
     std::uint32_t reward = 0;
     switch (contract_) {
@@ -226,8 +238,8 @@ void Tetris::drawContract(Screen& screen) const {
             line(6, "Закрой ряд");
             line(7, "со знаком *");
             if (gold_.moves != 0) {
-                line(9, "Фигур:", Theme::paperMuted);
-                screen.number(left + 8, 9, gold_.moves, Theme::ink, Theme::paper);
+                line(9, "Осталось фигур:", Theme::paperMuted);
+                screen.number(left + 18, top + 9, gold_.moves, Theme::ink, Theme::paper);
             } else {
                 line(9, "Ищем жилу", Theme::paperMuted);
             }
@@ -245,8 +257,8 @@ void Tetris::drawContract(Screen& screen) const {
             reward = streakReward;
             break;
     }
-    line(10, "Награда", Theme::paperMuted);
-    screen.number(left + 9, 10, reward, Theme::ink, Theme::paper);
+    line(12, "Награда", Theme::paperMuted);
+    screen.number(left + 15, top + 12, reward, Theme::ink, Theme::paper);
 }
 
 Result Tetris::result() const {

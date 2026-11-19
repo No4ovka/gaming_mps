@@ -1,4 +1,5 @@
 """Run the real Tetris firmware through the shared QEMU UART launcher."""
+import argparse
 from pathlib import Path
 import re
 import socket
@@ -12,8 +13,14 @@ from terminal import mouse_bytes
 from tests.terminal_model import TerminalModel
 
 SCREENS = ROOT / "artifacts" / "screens"
-CODE = re.compile(r"P1-[0-9A-Z]{6}(?:-[0-9A-Z]{6}){3}")
-DEMO_CODE = b"P1-040020-800000-000003-ZZYV67"  # Tetris, Normal, level 1, seed 0.
+CODE = re.compile(r"(?:P1-[0-9A-Z]{6}(?:-[0-9A-Z]{6}){3}|P2-(?:[0-9A-Z]{4}-){2}[0-9A-Z]{5})")
+# Equivalent codes for Tetris, Normal, level 1, seed 0.
+DEMO_P1 = "P1-040020-800000-000003-ZZYV67"
+DEMO_P2 = "P2-0G00-0000-02RGG"
+
+# Screen::fieldX, fieldY, width and height from the shared screen contract.
+FIELD_X, FIELD_Y, FIELD_WIDTH, FIELD_HEIGHT = 2, 5, 72, 30
+BOARD_COLUMNS, BOARD_ROWS, CELL_WIDTH = 10, 20, 2
 
 # Position/rotate, descend that many steps, expect this total number of cleared lines.
 # The first four figures earn the first bounty. The next three clear the marked row.
@@ -58,8 +65,13 @@ class Session:
     def key(self, key):
         self.uart.sendall(key)
 
-    def click(self, y):
-        self.key(mouse_bytes(0, 20, y) + mouse_bytes(0, 20, y, True))
+    def click_option(self, label):
+        for y, line in enumerate(self.screen.text().splitlines()):
+            x = line.find(label)
+            if x >= 0:
+                self.key(mouse_bytes(0, x, y) + mouse_bytes(0, x, y, True))
+                return
+        raise AssertionError(f"Menu option {label!r} is missing")
 
     def code(self):
         return CODE.search(self.screen.text()).group()
@@ -68,30 +80,33 @@ class Session:
         return {(x, y) for x, y, glyph in self.field() if glyph == "◆"}
 
     def field(self):
+        left = FIELD_X + (FIELD_WIDTH - CELL_WIDTH * BOARD_COLUMNS) // 2
+        top = FIELD_Y + (FIELD_HEIGHT - BOARD_ROWS) // 2
         return ((x, y, self.screen.cells[y][x][0])
-                for y in range(5, 25) for x in range(18, 38, 2))
+                for y in range(top, top + BOARD_ROWS)
+                for x in range(left, left + CELL_WIDTH * BOARD_COLUMNS, CELL_WIDTH))
 
     def start(self, adjustment, difficulty):
-        self.click(10)
+        self.click_option("Тетрис")
         self.text("Меняет начальный темп")
         if adjustment:
             self.key(adjustment)
         self.text(f"< {difficulty} >")
-        self.click(16)
+        self.click_option("Начать игру")
         self.wait(lambda: len(self.falling()) == 4 and "Счёт: 0" in self.screen.text(),
                   "a fresh Tetris board")
         self.text("До уровня: 10")
 
 
-def play_demo(session):
+def play_demo(session, input_code, emitted_code):
     """Play a reproducible challenge through both rewards and the first level transition."""
-    session.click(16)
+    session.click_option("Играть по коду")
     session.text("Введи код друга")
-    session.key(DEMO_CODE + b"\r")
+    session.key(input_code.encode("ascii") + b"\r")
     session.text("Код проверен")
     session.key(b"\r")
     session.text("Убери 1 ряд")
-    assert session.code() == DEMO_CODE.decode()
+    assert session.code() == emitted_code
     assert any(glyph == "◇" for _, _, glyph in session.field())
     assert "СЛЕДУЮЩАЯ" in session.screen.text()
     for placed, (position, steps, lines) in enumerate(DEMO_MOVES, 1):
@@ -102,6 +117,7 @@ def play_demo(session):
         if placed == 4:
             session.text("Счёт: 175")
             session.text("ЗОЛОТАЯ ЖИЛА")
+            session.text("Осталось фигур: 6")
             assert sum(glyph == "*" for _, _, glyph in session.field()) == 1
             session.screen.snapshot(SCREENS, "tetris-gold")
         elif placed == 7:
@@ -115,22 +131,28 @@ def play_demo(session):
     session.text("Убери 1 ряд")
     session.text("Уровень: 1")
     session.text("Наград: 0")
-    assert session.code() == DEMO_CODE.decode()
+    assert session.code() == emitted_code
     session.key(b"q")
     session.text("Выбери игру")
 
 
 def main():
     """Exercise all difficulties, movement, pause, replay and game over."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--expect-p2", action="store_true", help="Require the shared firmware to emit P2 codes")
+    args = parser.parse_args()
     with Qemu(port=5557) as qemu:
         session = Session(qemu.serial)
         session.text("Выбери игру")
         session.start(b"a", "Лёгкая")
         original_code = session.code()
+        emits_p2 = original_code.startswith("P2-")
+        if args.expect_p2:
+            assert emits_p2, f"Expected a new P2 code, received {original_code}"
         initial = session.falling()
         session.key(b"\x1b[D")
         left = min(x for x, _ in initial)
-        session.wait(lambda: min((x for x, _ in session.falling()), default=-1) == left - 2,
+        session.wait(lambda: min((x for x, _ in session.falling()), default=-1) == left - CELL_WIDTH,
                      "a left move from an ANSI arrow")
         session.key(b"r")
         session.wait(lambda: session.falling() == initial, "the same opening piece after replay")
@@ -167,7 +189,10 @@ def main():
         assert session.code() == hard_code
         session.key(b"q")
         session.text("Выбери игру")
-        play_demo(session)
+        play_demo(session, DEMO_P1, DEMO_P2 if emits_p2 else DEMO_P1)
+        if emits_p2:
+            play_demo(session, DEMO_P2, DEMO_P2)
+            print("PASS: P1 and P2 start the same game and replay as P2")
     print("PASS: ESP32 UART and menu, all difficulties, pause, replay, loss, bounty, gold and level 2")
 
 
