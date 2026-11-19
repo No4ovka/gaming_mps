@@ -29,8 +29,8 @@ static constexpr std::string_view closed = "▪";
 
 /** @brief Вычисляет ожидаемые одинаковые клетки, центрированные в игровой области. */
 static Tile tileAt(int size, int x, int y) {
-    const int width = (Screen::width - 4) / size;
-    const int height = (Screen::height - 2) / size;
+    const int height = std::min((Screen::width - 4) / (2 * size), (Screen::height - 2) / size);
+    const int width = 2 * height;
     return {(Screen::width - size * width) / 2 + x * width,
             (Screen::height - size * height) / 2 + y * height, width, height};
 }
@@ -53,7 +53,7 @@ static std::string_view cellGlyph(std::string_view frame, int size, int x, int y
     const auto tile = tileAt(size, x, y);
     const int glyphRow = (std::max(1, tile.height - 1) - 1) / 2;
     const auto marker = mouse(InputType::None, size, x, y,
-                              sideMark ? tile.width - 1 : (tile.width - 2) / 2, glyphRow);
+                              sideMark ? tile.width - 1 : std::max(1, tile.height - 1) - 1, glyphRow);
     std::size_t byte = 0;
     for (int row = 0; row < Screen::fieldY + marker.y; ++row) {
         byte = frame.find('\n', byte) + 1;
@@ -313,6 +313,10 @@ static void auditHitboxes() {
         const int size = 6 + 2 * static_cast<int>(level);
         game.start(settings);
         const auto first = tileAt(size, 0, 0);
+        CHECK(first.width == 2 * first.height);
+        CHECK((first.width * size + 4) == 2 * (first.height * size + 2));
+        const int faceHeight = std::max(1, first.height - 1);
+        CHECK(2 * faceHeight <= first.width && faceHeight <= first.height);
         for (int y = 0; y < Screen::height; ++y) {
             for (int x = 0; x < Screen::width; ++x) {
                 if (x >= first.x && x < first.x + size * first.width &&

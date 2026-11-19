@@ -54,8 +54,12 @@ int Minesweeper::index(Point position) const {
 }
 
 Minesweeper::Layout Minesweeper::boardLayout() const {
-    const int width = ((Screen::width - 4) / size_) * size_;
-    const int height = ((Screen::height - 2) / size_) * size_;
+    // A console character is twice as tall as it is wide (for example, 8x16 px).
+    // Use two columns per row for both the tiles and the complete square board.
+    const int cellHeight = std::min((Screen::width - 4) / (2 * size_),
+                                    (Screen::height - 2) / size_);
+    const int height = cellHeight * size_;
+    const int width = 2 * height;
     return {{(Screen::width - width) / 2, (Screen::height - height) / 2}, width, height};
 }
 
@@ -232,13 +236,12 @@ void Minesweeper::drawCell(Screen& screen, const Layout& layout, Point position,
     const int height = layout.height / size_;
     const int x = layout.origin.x + position.x * width;
     const int y = layout.origin.y + position.y * height;
-    const int faceWidth = width - 1;
     const int faceHeight = std::max(1, height - 1);
+    const int faceWidth = 2 * faceHeight;
     const int glyphY = y + (faceHeight - 1) / 2;
     screen.fill(x, y, faceWidth, faceHeight, background);
-    screen.cell(x + (faceWidth - 1) / 2, glyphY, foreground, background, glyph);
-    if (finished && cell.flag) screen.text(x + faceWidth, glyphY, cell.mine ? "▼" : "!", Theme::red);
-    else if (selected) screen.text(x + faceWidth, glyphY, "│", Theme::muted);
+    screen.cell(x + (faceWidth - 2) / 2, glyphY, foreground, background, glyph);
+    if (finished && cell.flag) screen.text(x + width - 1, glyphY, cell.mine ? "▼" : "!", Theme::red);
 }
 
 void Minesweeper::draw(Screen& screen) const {
@@ -247,7 +250,7 @@ void Minesweeper::draw(Screen& screen) const {
     const int top = layout.origin.y;
     const int width = layout.width;
     const int height = layout.height;
-    screen.frame(left - 1, top - 1, width + 2, height + 2, Theme::border);
+    screen.frame(left - 2, top - 1, width + 4, height + 2, Theme::border);
     screen.text(left + (width - 19) / 2, top - 1, " ДИНАМИТНАЯ ДОЛИНА ", Theme::accent);
     const Point selection = contains(hover_) ? hover_ : cursor_;
     const bool playing = result_.state == State::Playing;

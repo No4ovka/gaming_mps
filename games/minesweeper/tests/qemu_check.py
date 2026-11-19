@@ -18,7 +18,8 @@ P2_PATTERN = re.compile(r"P2-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{5}")
 # Match Screen::fieldX, fieldY, width and height.
 FIELD_X, FIELD_Y, FIELD_WIDTH, FIELD_HEIGHT = 2, 5, 72, 30
 SIZE = 8
-CELL_WIDTH, CELL_HEIGHT = (FIELD_WIDTH - 4) // SIZE, (FIELD_HEIGHT - 2) // SIZE
+CELL_HEIGHT = min((FIELD_WIDTH - 4) // (2 * SIZE), (FIELD_HEIGHT - 2) // SIZE)
+CELL_WIDTH = 2 * CELL_HEIGHT
 BOARD_WIDTH, BOARD_HEIGHT = CELL_WIDTH * SIZE, CELL_HEIGHT * SIZE
 BOARD_X = FIELD_X + (FIELD_WIDTH - BOARD_WIDTH) // 2
 BOARD_Y = FIELD_Y + (FIELD_HEIGHT - BOARD_HEIGHT) // 2
@@ -45,7 +46,8 @@ def cell_marker(x, y):
     """Return the console position of the glyph inside a tile."""
     column, row = cell_position(x, y)
     width, height = cell_size(x, y)
-    return column + (width - 2) // 2, row + (max(1, height - 1) - 1) // 2
+    face_height = max(1, height - 1)
+    return column + face_height - 1, row + (face_height - 1) // 2
 
 
 def cell_click(x, y, right=False, dx=0, dy=0):
