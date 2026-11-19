@@ -53,6 +53,7 @@ int Menu::rows() const {
     }
 }
 int Menu::hit(int x, int y) const {
+    x -= 10; y -= 5;
     if (x < 9 || x >= 71) return -1;
     switch (page_) {
         case Page::Main:
@@ -204,9 +205,9 @@ void Menu::option(Screen& s, int row, int y, std::string_view label) const {
     const bool paper = page_ != Page::Paused && page_ != Page::Results;
     const Color background = selected ? Theme::wood : paper ? Theme::paper : Theme::background;
     const Color foreground = selected ? Theme::white : paper ? Theme::ink : Theme::text;
-    s.canvasFill(9, y, 62, 1, background);
-    s.canvasText(10, y, selected ? "*" : " ", foreground, background);
-    s.canvasText(13, y, label, foreground, background);
+    s.canvasFill(19, y + 5, 62, 1, background);
+    s.canvasText(20, y + 5, selected ? "*" : " ", foreground, background);
+    s.canvasText(23, y + 5, label, foreground, background);
 }
 void Menu::draw(Screen& s) const {
     s.begin();
@@ -215,27 +216,27 @@ void Menu::draw(Screen& s) const {
     if (gamePage) {
         s.canvasText(1, 2, std::string(gameName(game_)) + " / " + difficultyName(settings_.difficulty)
                      + " / Уровень " + std::to_string(result_.level), Theme::muted);
-        s.canvasFrame(1, 4, 54, 22);
-        s.canvasFrame(56, 4, 23, 22);
+        s.canvasFrame(1, 4, 74, 32);
+        s.canvasFrame(76, 4, 23, 32);
         game().draw(s);
-        s.canvasText(1, 27, "Стрелки/WASD: движение   P: пауза   R: повтор   Q: в меню", Theme::muted);
+        s.canvasText(1, 37, "Стрелки/WASD: движение   P: пауза   R: повтор   Q: в меню", Theme::muted);
         const auto code = currentCode();
-        s.canvasText(1, 28, code.empty() ? "Код появится после первого открытия" : "Код испытания: " + code, Theme::accent);
+        s.canvasText(1, 38, code.empty() ? "Код появится после первого открытия" : "Код испытания: " + code, Theme::accent);
         if (page_ == Page::Paused) {
-            s.canvasFill(1, 4, 78, 22, Theme::background);
-            s.canvasFill(8, 8, 64, 13, Theme::background);
-            s.canvasFrame(8, 8, 64, 13, Theme::accent);
-            s.canvasText(13, 10, "Пауза", Theme::accent);
+            s.canvasFill(1, 4, 98, 32, Theme::background);
+            s.canvasFill(18, 13, 64, 13, Theme::background);
+            s.canvasFrame(18, 13, 64, 13, Theme::accent);
+            s.canvasText(23, 15, "Пауза", Theme::accent);
             option(s, 0, 13, "Продолжить");
             option(s, 1, 15, "Повторить те же условия");
             option(s, 2, 17, "В меню");
         } else if (page_ == Page::Results) {
-            s.canvasFill(1, 4, 78, 22, Theme::background);
-            s.canvasFill(8, 7, 64, 16, Theme::background);
-            s.canvasFrame(8, 7, 64, 16, Theme::accent);
-            s.canvasText(13, 9, result_.state == State::Won ? "Уровень пройден" : "Партия окончена", Theme::accent);
-            s.canvasText(13, 11, "Счёт: " + std::to_string(result_.score));
-            s.canvasText(13, 12, "Игровое время: " + std::to_string(result_.timeMs / 1000) + " с");
+            s.canvasFill(1, 4, 98, 32, Theme::background);
+            s.canvasFill(18, 12, 64, 16, Theme::background);
+            s.canvasFrame(18, 12, 64, 16, Theme::accent);
+            s.canvasText(23, 14, result_.state == State::Won ? "Уровень пройден" : "Партия окончена", Theme::accent);
+            s.canvasText(23, 16, "Счёт: " + std::to_string(result_.score));
+            s.canvasText(23, 17, "Игровое время: " + std::to_string(result_.timeMs / 1000) + " с");
             int row = 0;
             if (hasNext()) { option(s, row, 16 + 2 * row, "Следующий уровень"); ++row; }
             option(s, row, 16 + 2 * row, "Повторить те же условия"); ++row;
@@ -244,23 +245,23 @@ void Menu::draw(Screen& s) const {
         return;
     }
     // A paper notice inside a wooden saloon sign; all controls keep their coordinates.
-    s.canvasFill(8, 5, 64, 20, Theme::paper);
-    s.canvasFrame(8, 5, 64, 20, Theme::wood);
-    s.canvasFill(9, 6, 62, 3, Theme::wood);
-    s.canvasText(24, 6, "*  САЛУН «ТРИ СТВОЛА»  *", Theme::white, Theme::wood);
+    s.canvasFill(18, 10, 64, 20, Theme::paper);
+    s.canvasFrame(18, 10, 64, 20, Theme::wood);
+    s.canvasFill(19, 11, 62, 3, Theme::wood);
+    s.canvasText(34, 11, "*  САЛУН «ТРИ СТВОЛА»  *", Theme::white, Theme::wood);
     s.canvasText(1, 2, "Три игры. Один салун.", Theme::muted);
     if (page_ != Page::Code)
-        s.canvasText(1, 27, "Стрелки/WASD: выбор   Enter/ЛКМ: подтвердить   Esc/Q: назад", Theme::muted);
+        s.canvasText(1, 37, "Стрелки/WASD: выбор   Enter/ЛКМ: подтвердить   Esc/Q: назад", Theme::muted);
     const char* cactus[] = {"  |  ", "| |  ", "|_| |", "  |_|", "  |  ", "__|__"};
     for (int i = 0; i < 6; ++i) {
-        s.canvasText(1, 18 + i, cactus[i], Theme::muted);
-        s.canvasText(74, 18 + i, cactus[i], Theme::muted);
+        s.canvasText(11, 23 + i, cactus[i], Theme::muted);
+        s.canvasText(84, 23 + i, cactus[i], Theme::muted);
     }
     const auto text = [&s](int y, std::string_view label, Color color = Theme::ink) {
-        s.canvasText(13, y, label, color, Theme::paper);
+        s.canvasText(23, y + 5, label, color, Theme::paper);
     };
     const auto title = [&s](std::string_view label) {
-        s.canvasText(13, 8, label, Theme::white, Theme::wood);
+        s.canvasText(23, 13, label, Theme::white, Theme::wood);
     };
     if (page_ == Page::Main) {
         title("Выбери игру");
@@ -269,7 +270,7 @@ void Menu::draw(Screen& s) const {
         for (int i = 0; i < 5; ++i) {
             const int y = 10 + 2 * i;
             option(s, i, y, items[i]);
-            s.canvasText(50, y, notes[i], selected_ == i ? Theme::white : Theme::paperMuted,
+            s.canvasText(60, y + 5, notes[i], selected_ == i ? Theme::white : Theme::paperMuted,
                          selected_ == i ? Theme::wood : Theme::paper);
         }
         text(21, "* --------------------------------------------- *", Theme::paperMuted);
@@ -294,7 +295,7 @@ void Menu::draw(Screen& s) const {
         text(12, "> " + codeText_.substr(codeText_.size() > 54 ? codeText_.size() - 54 : 0));
         text(15, error_, Theme::paperError);
         text(19, "Формат: P1-XXXXXX-XXXXXX-XXXXXX-XXXXXX", Theme::paperMuted);
-        s.canvasText(1, 27, "Enter: проверить   Backspace: стереть   Esc: назад", Theme::muted);
+        s.canvasText(1, 37, "Enter: проверить   Backspace: стереть   Esc: назад", Theme::muted);
     } else if (page_ == Page::CodeConfirm) {
         title("Код проверен");
         text(10, std::string(gameName(game_)) + " / " + difficultyName(settings_.difficulty));

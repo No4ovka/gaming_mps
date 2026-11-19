@@ -73,11 +73,11 @@ def worker(report):
         wait('Выбери игру')
         (ROOT / 'artifacts/screens/native-main.txt').write_text('\n'.join(console_rows(terminal)), encoding='utf-8')
         assert key(40) == b'\x1b[B'
-        mouse(20, 12, 1)
-        mouse(20, 12, 0)
+        mouse(30, 17, 1)
+        mouse(30, 17, 0)
         wait('Меняет долю мин')
-        mouse(20, 16, 1)
-        mouse(20, 16, 0)
+        mouse(30, 21, 1)
+        mouse(30, 21, 0)
         wait('Модуль: заглушка')
         assert mouse(20, 11, 2).startswith(b'\x1b[<2;')
         mouse(20, 11, 0)
@@ -92,7 +92,7 @@ def worker(report):
         key(81, 'q')
         wait('Выбери игру')
     Path(report).write_text(json.dumps({'passed': True,
-        'checks': ['ReadConsoleInputW', 'WriteConsoleInputW', 'WriteConsoleW', 'ReadConsoleOutputCharacterW: all 80x30 cells match firmware', 'arrow', 'left click', 'right click', 'hover', 'pause', 'return', 'QEMU UART']}, indent=2), encoding='utf-8')
+        'checks': ['ReadConsoleInputW', 'WriteConsoleInputW', 'WriteConsoleW', 'ReadConsoleOutputCharacterW: all 100x40 cells match firmware', 'arrow', 'left click', 'right click', 'hover', 'pause', 'return', 'QEMU UART']}, indent=2), encoding='utf-8')
 
 
 def main():

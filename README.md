@@ -11,7 +11,7 @@
 
 ## Среда
 
-- Windows 10/11, терминал с ANSI/UTF-8 размером не меньше **80×30**.
+- Windows 10/11, терминал с ANSI/UTF-8 размером не меньше **100×40**.
 - ESP-IDF **v5.5.1**, цель `esp32`, C++17, GCC, CMake и Ninja из установки ESP-IDF.
 - `qemu-xtensa`, `xtensa-esp-elf-gdb`; Python из окружения ESP-IDF.
 - Git и VS Code с расширениями Espressif ESP-IDF и Microsoft C/C++.

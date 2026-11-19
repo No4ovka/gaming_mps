@@ -26,10 +26,15 @@ public:
     void canvasFill(int x, int y, int w, int h, Color background);
     /** @brief Возвращает снимок символов канваса без ANSI для проверок. */
     std::string plain() const;
-    static constexpr int width = 52; ///< Ширина содержимого игрового поля.
-    static constexpr int height = 20; ///< Высота содержимого игрового поля.
+    static constexpr int canvasWidth = 100; ///< Ширина полного терминала.
+    static constexpr int canvasHeight = 40; ///< Высота полного терминала.
+    static constexpr int fieldX = 2; ///< Начало поля по горизонтали.
+    static constexpr int fieldY = 5; ///< Начало поля по вертикали.
+    static constexpr int panelX = 77; ///< Начало боковой панели.
+    static constexpr int width = 72; ///< Ширина содержимого игрового поля.
+    static constexpr int height = 30; ///< Высота содержимого игрового поля.
     static constexpr int panelWidth = 21; ///< Ширина содержимого боковой панели.
-    static constexpr int panelHeight = 20; ///< Высота содержимого боковой панели.
+    static constexpr int panelHeight = 30; ///< Высота содержимого боковой панели.
 
     /** @brief Выводит строку UTF-8 с одноколоночными символами внутри поля. */
     void text(int x, int y, std::string_view value,
@@ -64,8 +69,8 @@ private:
             return glyph == other.glyph && foreground == other.foreground && background == other.background;
         }
     };
-    std::array<Pixel, 80 * 30> next_{}; ///< Новый кадр.
-    std::array<Pixel, 80 * 30> shown_{}; ///< Последний отправленный кадр.
+    std::array<Pixel, canvasWidth * canvasHeight> next_{}; ///< Новый кадр.
+    std::array<Pixel, canvasWidth * canvasHeight> shown_{}; ///< Последний отправленный кадр.
     Output output_; ///< Приёмник готовых байтов.
     void* context_; ///< Контекст приёмника.
     bool initialized_ = false; ///< Первый кадр ещё не отправлен.
