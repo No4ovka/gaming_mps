@@ -236,11 +236,14 @@ void Minesweeper::drawCell(Screen& screen, const Layout& layout, Point position,
     const int height = layout.height / size_;
     const int x = layout.origin.x + position.x * width;
     const int y = layout.origin.y + position.y * height;
-    const int faceHeight = std::max(1, height - 1);
-    const int faceWidth = 2 * faceHeight;
-    const int glyphY = y + (faceHeight - 1) / 2;
-    screen.fill(x, y, faceWidth, faceHeight, background);
-    screen.cell(x + (faceWidth - 2) / 2, glyphY, foreground, background, glyph);
+    const int glyphY = y + (height - 1) / 2;
+    screen.fill(x, y, width, height, background);
+    // Sub-character separators leave almost the entire square face available.
+    for (int row = 0; row < height; ++row)
+        screen.glyph(x + width - 1, y + row, Theme::background, background, U'▕');
+    for (int column = 0; column < width; ++column)
+        screen.glyph(x + column, y + height - 1, Theme::background, background, U'▁');
+    screen.glyph(x + (width - 1) / 2, glyphY, foreground, background, glyph);
     if (finished && cell.flag) screen.text(x + width - 1, glyphY, cell.mine ? "▼" : "!", Theme::red);
 }
 

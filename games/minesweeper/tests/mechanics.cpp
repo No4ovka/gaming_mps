@@ -18,7 +18,7 @@
     } \
 } while (false)
 
-/** @brief Прямоугольник клетки в области 68×28, включая разделители. */
+/** @brief Прямоугольник клетки в области 68×32, включая разделители. */
 struct Tile {
     int x;
     int y;
@@ -51,9 +51,8 @@ static std::string frame(const Minesweeper& game) {
 /** @brief Считывает глиф в центре плитки, учитывая одноколоночный UTF-8. */
 static std::string_view cellGlyph(std::string_view frame, int size, int x, int y, bool sideMark = false) {
     const auto tile = tileAt(size, x, y);
-    const int glyphRow = (std::max(1, tile.height - 1) - 1) / 2;
     const auto marker = mouse(InputType::None, size, x, y,
-                              sideMark ? tile.width - 1 : std::max(1, tile.height - 1) - 1, glyphRow);
+                              sideMark ? tile.width - 1 : (tile.width - 1) / 2, (tile.height - 1) / 2);
     std::size_t byte = 0;
     for (int row = 0; row < Screen::fieldY + marker.y; ++row) {
         byte = frame.find('\n', byte) + 1;

@@ -16,7 +16,7 @@ MINES = {2, 11, 21, 23, 31, 38, 39, 41, 42, 54}
 P2_PATTERN = re.compile(r"P2-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{5}")
 
 # Match Screen::fieldX, fieldY, width and height.
-FIELD_X, FIELD_Y, FIELD_WIDTH, FIELD_HEIGHT = 2, 5, 72, 30
+FIELD_X, FIELD_Y, FIELD_WIDTH, FIELD_HEIGHT = 2, 5, 72, 34
 SIZE = 8
 CELL_HEIGHT = min((FIELD_WIDTH - 4) // (2 * SIZE), (FIELD_HEIGHT - 2) // SIZE)
 CELL_WIDTH = 2 * CELL_HEIGHT
@@ -46,8 +46,7 @@ def cell_marker(x, y):
     """Return the console position of the glyph inside a tile."""
     column, row = cell_position(x, y)
     width, height = cell_size(x, y)
-    face_height = max(1, height - 1)
-    return column + face_height - 1, row + (face_height - 1) // 2
+    return column + (width - 1) // 2, row + (height - 1) // 2
 
 
 def cell_click(x, y, right=False, dx=0, dy=0):
