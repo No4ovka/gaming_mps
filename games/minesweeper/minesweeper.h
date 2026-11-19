@@ -26,6 +26,13 @@ private:
         bool operator==(Point other) const { return x == other.x && y == other.y; }
     };
 
+    /** @brief Положение поля и размер клетки в символах терминала. */
+    struct Layout {
+        Point origin; ///< Левый верхний угол клеток внутри Screen.
+        int cellWidth; ///< Ширина клетки с вертикальным швом.
+        int cellHeight; ///< Высота клетки в строках.
+    };
+
     /** @brief Содержимое и видимое состояние одной клетки. */
     struct Cell {
         std::uint8_t adjacent = 0; ///< Число мин среди восьми соседей.
@@ -50,6 +57,8 @@ private:
     bool contains(Point position) const;
     /** @brief Преобразует логическую позицию в индекс массива. */
     int index(Point position) const;
+    /** @brief Выбирает масштаб для текущего размера и центрирует поле. */
+    Layout boardLayout() const;
     /** @brief Преобразует локальные символьные координаты мыши в клетку. */
     Point pointerCell(const Input& input) const;
     /** @brief Передаёт индексы всех существующих соседей одному обработчику. */
@@ -68,5 +77,6 @@ private:
     /** @brief Переключает флаг только на закрытой клетке. */
     void toggleFlag(Point position);
     /** @brief Рисует одну клетку с её числом или отметкой. */
-    void drawCell(Screen& screen, Point position, Point selection, bool preview, bool ready) const;
+    void drawCell(Screen& screen, const Layout& layout, Point position,
+                  bool selected, bool preview, bool ready) const;
 };

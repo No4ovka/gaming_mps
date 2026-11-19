@@ -55,11 +55,22 @@ int Minesweeper::index(Point position) const {
     return position.y * size_ + position.x;
 }
 
+Minesweeper::Layout Minesweeper::boardLayout() const {
+    constexpr int cellWidths[] = {7, 6, 5, 4, 4};
+    constexpr int cellHeights[] = {3, 2, 2, 2, 1};
+    const int level = (size_ - 8) / 2;
+    const int width = cellWidths[level];
+    const int height = cellHeights[level];
+    return {{(Screen::width - size_ * width) / 2, (Screen::height - size_ * height) / 2},
+            width, height};
+}
+
 Minesweeper::Point Minesweeper::pointerCell(const Input& input) const {
-    const int x = input.x - Screen::boardX(size_);
-    const int y = input.y - Screen::boardY(size_);
-    if (x < 0 || x >= 2 * size_ || y < 0 || y >= size_) return {};
-    return {x / 2, y};
+    const Layout layout = boardLayout();
+    const int x = input.x - layout.origin.x;
+    const int y = input.y - layout.origin.y;
+    if (x < 0 || x >= size_ * layout.cellWidth || y < 0 || y >= size_ * layout.cellHeight) return {};
+    return {x / layout.cellWidth, y / layout.cellHeight};
 }
 
 template<typename Action>
@@ -194,20 +205,22 @@ void Minesweeper::update(std::uint32_t ms) {
     if (result_.state == State::Playing && result_.firstX >= 0) result_.timeMs += ms;
 }
 
-void Minesweeper::drawCell(Screen& screen, Point position, Point selection, bool preview, bool ready) const {
+void Minesweeper::drawCell(Screen& screen, const Layout& layout, Point position,
+                           bool selected, bool preview, bool ready) const {
     const Cell& cell = cells_[index(position)];
-    char32_t glyph = U'#';
-    Color foreground = Theme::muted;
-    Color background = Theme::ink;
+    char32_t glyph = U'▪';
+    Color foreground = Theme::accent;
+    Color background = Theme::wood;
     const bool lost = result_.state == State::Lost;
 
     if (lost && cell.mine && (cell.open || !cell.flag)) {
         glyph = cell.open ? U'X' : U'*';
         foreground = cell.open ? Theme::white : Theme::red;
-        if (cell.open) background = Theme::paperError;
+        background = cell.open ? Theme::paperError : Theme::background;
     } else if (cell.flag) {
         glyph = lost && !cell.mine ? U'!' : U'F';
-        foreground = lost && !cell.mine ? Theme::red : Theme::accent;
+        foreground = Theme::ink;
+        background = lost && !cell.mine ? Theme::red : Theme::accent;
     } else if (cell.open) {
         glyph = cell.adjacent == 0 ? U' ' : U'0' + cell.adjacent;
         foreground = hintColor[cell.adjacent];
@@ -218,18 +231,38 @@ void Minesweeper::drawCell(Screen& screen, Point position, Point selection, bool
         foreground = ready ? Theme::ink : Theme::white;
         background = ready ? Theme::accent : Theme::border;
     }
-    if (position == selection && result_.state == State::Playing) {
-        background = Theme::wood;
-        if (glyph == U'#') foreground = Theme::white;
+    if (selected && result_.state == State::Playing) {
+        foreground = Theme::ink;
+        background = Theme::paper;
     }
-    screen.cell(Screen::boardX(size_) + 2 * position.x, Screen::boardY(size_) + position.y,
+
+    const int x = layout.origin.x + layout.cellWidth * position.x;
+    const int y = layout.origin.y + layout.cellHeight * position.y;
+    const int faceWidth = layout.cellWidth - 1;
+    screen.fill(x, y, faceWidth, layout.cellHeight, background);
+    if (layout.cellHeight > 1) {
+        const Color lip = selected && result_.state == State::Playing ? Theme::accent : Theme::ink;
+        screen.fill(x, y + layout.cellHeight - 1, faceWidth, 1, lip);
+    }
+    screen.cell(x + (faceWidth - 1) / 2, y + (layout.cellHeight - 1) / 2,
                 foreground, background, glyph);
 }
 
 void Minesweeper::draw(Screen& screen) const {
-    const int left = Screen::boardX(size_);
-    const int top = Screen::boardY(size_);
-    screen.frame(left - 1, top - 1, 2 * size_ + 2, size_ + 2);
+    const Layout layout = boardLayout();
+    const int left = layout.origin.x;
+    const int top = layout.origin.y;
+    const int width = size_ * layout.cellWidth;
+    const int height = size_ * layout.cellHeight;
+    screen.fill(left, top, width, height, Theme::ink);
+    screen.fill(left - 2, top - 1, width + 4, 1, Theme::wood);
+    screen.text(left + (width - 16) / 2, top - 1, "* ШАХТА САЛУНА *", Theme::white, Theme::wood);
+    screen.fill(left - 2, top + height, width + 4, 1, Theme::wood);
+    for (int y = 0; y < height; ++y) {
+        const bool brace = y % (layout.cellHeight * 4) == 0;
+        screen.text(left - 2, top + y, brace ? "+│" : "▒│", Theme::accent, Theme::wood);
+        screen.text(left + width, top + y, brace ? "│+" : "│▒", Theme::accent, Theme::wood);
+    }
     const Point selection = contains(hover_) ? hover_ : cursor_;
     std::array<bool, maxCells> preview{};
     bool inspecting = false;
@@ -245,25 +278,30 @@ void Minesweeper::draw(Screen& screen) const {
     }
     for (int y = 0; y < size_; ++y) {
         for (int x = 0; x < size_; ++x) {
-            drawCell(screen, {x, y}, selection, preview[index({x, y})], flagDelta == 0);
+            const Point position{x, y};
+            drawCell(screen, layout, position, position == selection,
+                     preview[index(position)], flagDelta == 0);
         }
     }
 
     const std::string side = std::to_string(size_);
-    screen.panelText(0, "Поле: " + side + "x" + side, Theme::accent);
-    screen.panelText(1, difficultyName(difficulty_));
-    screen.panelNumber(3, "Мин:", mines_);
-    screen.panelNumber(4, "Флагов:", flags_);
-    screen.panelNumber(5, "Осталось мин:", mines_ - flags_);
-    screen.panelNumber(7, "Время, с:", static_cast<std::int64_t>(result_.timeMs / 1000));
-    screen.panelText(10, "Enter/ЛКМ: открыть");
-    screen.panelText(11, "Пробел: открыть");
-    screen.panelText(12, "F/ПКМ: флаг");
-    screen.panelText(14, "Цифра: открыть рядом", Theme::muted);
+    screen.panelText(0, "*  СВОДКА ШАХТЫ  *", Theme::accent);
+    screen.panelText(1, "─────────────────────", Theme::border);
+    screen.panelText(3, "Поле: " + side + "x" + side);
+    screen.panelText(4, difficultyName(difficulty_), Theme::muted);
+    screen.panelNumber(6, "Мин:", mines_);
+    screen.panelNumber(8, "Флагов:", flags_);
+    screen.panelNumber(9, "Осталось мин:", mines_ - flags_, Theme::muted);
+    screen.panelNumber(11, "Время, с:", static_cast<std::int64_t>(result_.timeMs / 1000));
+    screen.panelText(13, "─────────────────────", Theme::border);
+    screen.panelText(15, "Enter/ЛКМ: открыть");
+    screen.panelText(16, "Пробел: открыть");
+    screen.panelText(17, "F/ПКМ: флаг");
+    screen.panelText(19, "Цифра: открыть рядом", Theme::muted);
     if (inspecting) {
-        if (flagDelta == 0) screen.panelText(15, "Можно раскрыть", Theme::accent);
-        else if (flagDelta > 0) screen.panelNumber(15, "Ещё флагов:", flagDelta);
-        else screen.panelNumber(15, "Лишних флагов:", -flagDelta);
+        if (flagDelta == 0) screen.panelText(21, "Можно раскрыть", Theme::accent);
+        else if (flagDelta > 0) screen.panelNumber(21, "Ещё флагов:", flagDelta);
+        else screen.panelNumber(21, "Лишних флагов:", -flagDelta);
     }
 }
 
