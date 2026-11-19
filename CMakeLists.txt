@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.16)
+set(EXTRA_COMPONENT_DIRS common games/tetris games/minesweeper games/pong)
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+idf_build_set_property(MINIMAL_BUILD ON)
+project(gaming_mps)
+idf_build_set_property(CXX_COMPILE_OPTIONS "-std=gnu++17" APPEND)

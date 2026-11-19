@@ -1,0 +1,28 @@
+0x40000400 in ?? ()
+Hardware assisted breakpoint 1 at 0x400d3f9c: file D:/Projects/gaming_mps/main/main.cpp, line 21.
+
+Thread 1 hit Temporary breakpoint 1, app_main () at D:/Projects/gaming_mps/main/main.cpp:21
+21	extern "C" void app_main() {
+16	}
+17	/** @brief Получает seed новой партии из аппаратного источника SDK. */
+18	static std::uint32_t newSeed() { return esp_random(); }
+19
+20	/** @brief Запускает оболочку; игровые модули не создают собственных циклов. */
+21	extern "C" void app_main() {
+22	    ESP_ERROR_CHECK(uart_driver_install(UART_NUM_0, 4096, 0, 0, nullptr, 0));
+23	    esp_log_level_set("*", ESP_LOG_NONE);
+24	    static Screen screen(writeUart);
+25	    static Tetris tetris;
+FIRST_PC=
+$1 = 0x400d3f9c
+22	    ESP_ERROR_CHECK(uart_driver_install(UART_NUM_0, 4096, 0, 0, nullptr, 0));
+SECOND_PC=
+$2 = 0x400d3f9f
+23	    esp_log_level_set("*", ESP_LOG_NONE);
+THIRD_PC=
+$3 = 0x400d3fc2
+#0  app_main () at D:/Projects/gaming_mps/main/main.cpp:23
+23	    esp_log_level_set("*", ESP_LOG_NONE);
+[Inferior 1 (process 1) detached]
+warning: could not convert 'main' from the host encoding (CP1252) to UTF-32.
+This normally should not happen, please file a bug report.

@@ -1,0 +1,6 @@
+{
+  "idf.extensionActivationMode": "always",
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json",
+  "files.encoding": "utf8",
+  "files.eol": "\n"
+}

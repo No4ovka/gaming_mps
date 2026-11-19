@@ -1,0 +1,6 @@
+PASS: actual Windows console preserves fragmented UTF-8 and right edge
+PASS: QEMU boot, settings, all 3 stubs, left/right/hover, bounds, pause, restart, fresh seed, valid/invalid codes, help
+PASS: GDB breakpoint in app_main and two source steps: 0x400d3f9c -> 0x400d3f9f -> 0x400d3fc2
+ALL QEMU CHECKS PASSED
+PASS: native Windows console keyboard, left/right click and hover -> ESP32/QEMU
+ReadConsoleOutputCharacterW: every visible 80x30 cell matched firmware after tested transitions.
