@@ -22,7 +22,7 @@ struct Tile {
     int width;
     int height;
 };
-static constexpr Tile tiles[] = {{7, 3}, {6, 2}, {5, 2}, {4, 2}, {4, 1}};
+static constexpr Tile tiles[] = {{4, 2}, {4, 2}, {4, 2}, {3, 2}, {3, 1}};
 static constexpr std::string_view closed = "▪";
 
 /** @brief Возвращает событие мыши в заданной точке клетки. */
@@ -42,9 +42,9 @@ static std::string frame(const Minesweeper& game) {
 }
 
 /** @brief Считывает глиф в центре плитки, учитывая одноколоночный UTF-8. */
-static std::string_view cellGlyph(std::string_view frame, int size, int x, int y) {
+static std::string_view cellGlyph(std::string_view frame, int size, int x, int y, bool sideMark = false) {
     const auto tile = tiles[(size - 8) / 2];
-    const auto marker = mouse(InputType::None, size, x, y, (tile.width - 2) / 2, (tile.height - 1) / 2);
+    const auto marker = mouse(InputType::None, size, x, y, sideMark ? tile.width - 1 : (tile.width - 2) / 2);
     std::size_t byte = 0;
     for (int row = 0; row < Screen::fieldY + marker.y; ++row) {
         byte = frame.find('\n', byte) + 1;
@@ -82,7 +82,7 @@ static void auditField(Settings settings, int expectedMines) {
     CHECK(!mine[settings.firstY * size + settings.firstX]);
 
     game.start(settings);
-    CHECK(frame(game).find("Мин: " + std::to_string(expectedMines)) != std::string::npos);
+    CHECK(frame(game).find("Динамиты: " + std::to_string(expectedMines)) != std::string::npos);
     game.update(1250);
     CHECK(game.result().timeMs == 1250);
     for (int y = 0; y < size; ++y) {
@@ -90,13 +90,14 @@ static void auditField(Settings settings, int expectedMines) {
             if (!mine[y * size + x]) game.handle(mouse(InputType::PointerLeft, size, x, y));
         }
     }
-    CHECK(game.result().state == State::Won && game.result().score == 0);
+    CHECK(game.result().state == State::Won &&
+          game.result().score == static_cast<unsigned>(size * size - expectedMines));
 
     const auto solved = frame(game);
     for (int y = 0; y < size; ++y) {
         for (int x = 0; x < size; ++x) {
             if (mine[y * size + x]) {
-                CHECK(cellGlyph(solved, size, x, y) == closed);
+                CHECK(cellGlyph(solved, size, x, y) == "■");
                 continue;
             }
             int neighbors = 0;
@@ -120,7 +121,9 @@ static void auditField(Settings settings, int expectedMines) {
         if (!mine[i]) continue;
         game.handle(mouse(InputType::PointerLeft, size, i % size, i / size, 1));
         CHECK(game.result().state == State::Lost);
-        CHECK(cellGlyph(frame(game), size, i % size, i / size) == "X");
+        const auto lost = frame(game);
+        CHECK(cellGlyph(lost, size, i % size, i / size) == "X");
+        CHECK(lost.find(closed) == std::string::npos);
         return;
     }
     CHECK(false);
@@ -142,12 +145,12 @@ static void auditInput() {
     game.handle(mouse(InputType::PointerLeft, size, size - 1, size - 1));
     game.update(3200);
     CHECK(game.result().timeMs == 0 && game.result().firstX == -1);
-    CHECK(frame(game).find("Флагов: 256") != std::string::npos);
-    CHECK(frame(game).find("Осталось мин: -218") != std::string::npos);
+    CHECK(frame(game).find("Банданы: 256") != std::string::npos);
+    CHECK(game.result().score == 0);
     for (int i = 0; i < size * size; ++i) {
         game.handle(mouse(InputType::PointerRight, size, i % size, i / size));
     }
-    CHECK(frame(game).find("Флагов: 0") != std::string::npos);
+    CHECK(frame(game).find("Банданы: 0") != std::string::npos);
     game.handle({InputType::Open});
     CHECK(game.result().state == State::Playing);
     CHECK(game.result().firstX == size - 1 && game.result().firstY == size - 1);
@@ -179,7 +182,7 @@ static void auditMenu() {
     game.handle(mouse(InputType::PointerRight, 8, 0, 0));
     game.handle(mouse(InputType::PointerLeft, 8, 0, 1));
     const auto revealed = frame(game);
-    CHECK(cellGlyph(revealed, 8, 0, 0) == "F");
+    CHECK(cellGlyph(revealed, 8, 0, 0) == "▼");
     CHECK(cellGlyph(revealed, 8, 0, 1) == " ");
     CHECK(cellGlyph(revealed, 8, 1, 0) != closed);
     CHECK(cellGlyph(revealed, 8, 0, 3) != closed);
@@ -205,6 +208,9 @@ static void auditMenu() {
     const auto code = encodeCode(GameId::Minesweeper, recorded);
     CHECK(!code.empty() && screen.plain().find(code) != std::string::npos);
     const auto original = frame(game);
+    const auto openingScore = game.result().score;
+    CHECK(openingScore > 0);
+    CHECK(original.find("Цена ошибки: " + std::to_string(openingScore)) != std::string::npos);
 
     menu.update(0);
     menu.update(1500);
@@ -212,7 +218,7 @@ static void auditMenu() {
     menu.update(5000);
     CHECK(game.result().timeMs == 1500);
     menu.handle({InputType::Restart});
-    CHECK(game.result().timeMs == 0 && frame(game) == original);
+    CHECK(game.result().timeMs == 0 && game.result().score == openingScore && frame(game) == original);
     menu.handle({InputType::Back});
     menu.draw(screen);
     CHECK(screen.plain().find("Выбери игру") != std::string::npos);
@@ -224,6 +230,38 @@ static void auditMenu() {
     menu.handle({InputType::Confirm});
     menu.handle({InputType::Confirm});
     CHECK(frame(game) == original && game.result().timeMs == 0);
+
+    // The seed source always returns 0, including when asked for a fresh field.
+    menu.update(0);
+    Input mine = mouse(InputType::PointerLeft, 8, 2, 0);
+    mine.x += Screen::fieldX;
+    mine.y += Screen::fieldY;
+    menu.handle(mine);
+    menu.update(1);
+    menu.draw(screen);
+    CHECK(screen.plain().find("Посмотреть все поле") != std::string::npos);
+    CHECK(screen.plain().find("ДИНАМИТНАЯ ДОЛИНА") == std::string::npos);
+
+    menu.handle({InputType::Down});
+    menu.handle({InputType::Confirm});
+    menu.draw(screen);
+    CHECK(screen.plain().find("ДИНАМИТНАЯ ДОЛИНА") != std::string::npos);
+    CHECK(screen.plain().find(code) != std::string::npos);
+    CHECK(cellGlyph(screen.plain(), 8, 2, 0) == "X");
+    const auto reviewed = game.result();
+    menu.handle(first);
+    menu.update(5000);
+    CHECK(game.result().score == reviewed.score && game.result().timeMs == reviewed.timeMs);
+
+    menu.handle({InputType::Confirm});
+    CHECK(game.result().state == State::Playing && game.result().firstX == -1 && game.result().score == 0);
+    menu.draw(screen);
+    CHECK(screen.plain().find("Код после первого открытия") != std::string::npos);
+    menu.handle(first);
+    menu.draw(screen);
+    recorded.seed = 1;
+    const auto freshCode = encodeCode(GameId::Minesweeper, recorded);
+    CHECK(freshCode != code && screen.plain().find(freshCode) != std::string::npos);
 }
 
 /** @brief Проверяет соседей цифры с точным, недостаточным и ошибочным набором флагов. */
@@ -234,11 +272,16 @@ static void auditChord() {
     game.start(settings);
     CHECK(cellGlyph(frame(game), 8, 3, 2) == "1");
     CHECK(cellGlyph(frame(game), 8, 4, 1) == closed);
+    const auto initialScore = game.result().score;
+    CHECK(initialScore > 0);
     game.handle(clue);
+    CHECK(game.result().score == initialScore);
     CHECK(cellGlyph(frame(game), 8, 4, 1) == closed);
 
     game.handle(mouse(InputType::PointerRight, 8, 3, 1));
+    CHECK(game.result().score == initialScore);
     game.handle(clue);
+    CHECK(game.result().score > initialScore);
     CHECK(game.result().state == State::Playing);
     CHECK(cellGlyph(frame(game), 8, 4, 1) != closed);
 
@@ -247,7 +290,9 @@ static void auditChord() {
     game.handle(clue);
     CHECK(game.result().state == State::Lost);
     CHECK(cellGlyph(frame(game), 8, 3, 1) == "X");
-    CHECK(cellGlyph(frame(game), 8, 4, 1) == "!");
+    const auto lost = frame(game);
+    CHECK(cellGlyph(lost, 8, 4, 1) == "2");
+    CHECK(cellGlyph(lost, 8, 4, 1, true) == "!");
 }
 
 /** @brief Проверяет расширенные зоны клика и отбрасывание щелчков по раме. */
@@ -292,5 +337,5 @@ int main() {
     auditMenu();
     auditChord();
     std::cout << "PASS: 15 profiles, mine counts, numbers, wins and losses, input, flood fill, "
-                 "flags, timing, pause, restart, replay code, chord and return to menu.\n";
+                 "flags, score, timing, pause, board review, fresh seed, replay code, chord and return to menu.\n";
 }

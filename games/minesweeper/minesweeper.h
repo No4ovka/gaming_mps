@@ -44,7 +44,6 @@ private:
     static constexpr int maxCells = 16 * 16; ///< Ёмкость поля и очереди раскрытия.
     std::array<Cell, maxCells> cells_{}; ///< Клетки текущего поля, по строкам.
     Result result_{}; ///< Результат, который считывает оболочка.
-    Difficulty difficulty_ = Difficulty::Normal; ///< Выбранная сложность.
     std::uint32_t seed_ = 0; ///< Начальное число для раскладки.
     int size_ = 8; ///< Сторона квадратного поля.
     int mines_ = 10; ///< Заданное число мин.
