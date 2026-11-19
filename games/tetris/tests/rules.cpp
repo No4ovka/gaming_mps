@@ -92,7 +92,9 @@ struct TetrisRulesTest {
     /** @brief Проверяет границы уровней, темп и сохранение поля при переходе. */
     static void levels() {
         Tetris game;
-        const std::array<std::uint32_t, 3> expectedIntervals{1200, 950, 680};
+        const std::array<std::uint32_t, 3> expectedIntervals{1500, 950, 500};
+        const std::array<std::uint32_t, 3> levelTwoIntervals{1363, 863, 454};
+        const std::array<std::uint32_t, 3> levelThreeIntervals{1250, 791, 416};
         for (unsigned difficulty = 0; difficulty < expectedIntervals.size(); ++difficulty) {
             const Settings settings{static_cast<Difficulty>(difficulty), 1, 0};
             for (const int removed : {1, 2}) {
@@ -117,7 +119,9 @@ struct TetrisRulesTest {
                     assert(game.lines_ == previous + static_cast<unsigned>(removed));
                     assert(game.result().state == State::Playing && game.result().level == levelBefore + 1);
                     assert(game.result().score == scoreBefore + (removed == 1 ? 100 : 300) * levelBefore);
-                    assert(game.board_[14 + removed][0] == 2 && game.fallInterval() < speedBefore);
+                    const auto expectedInterval = levelBefore == 1 ? levelTwoIntervals[difficulty]
+                                                                    : levelThreeIntervals[difficulty];
+                    assert(game.board_[14 + removed][0] == 2 && game.fallInterval() == expectedInterval);
                 }
             }
             game.start(settings);

@@ -54,7 +54,7 @@ constexpr std::array<Color, startingMasks.size()> colors{
     Theme::cyan, Theme::accent, Theme::purple, Theme::green, Theme::red, Theme::blue, Theme::orange
 }; ///< Цвет заполненных клеток для I, O, T, S, Z, J, L.
 constexpr std::array<std::uint32_t, 5> points{0, 100, 300, 500, 800}; ///< Очки за очистку от 0 до 4 строк.
-constexpr std::array<std::uint32_t, 3> baseIntervals{1200, 950, 680}; ///< Начальные интервалы по сложности.
+constexpr std::array<std::uint32_t, 3> baseIntervals{1500, 950, 500}; ///< Начальные интервалы по сложности.
 constexpr std::uint32_t linesPerLevel = 10; ///< Сколько удалённых рядов нужно для следующего уровня.
 constexpr std::uint32_t minInterval = 100; ///< Ограничение скорости на высоких уровнях, в мс.
 constexpr std::uint32_t noticeDuration = 1200; ///< Длительность подсветки сообщения в мс.
