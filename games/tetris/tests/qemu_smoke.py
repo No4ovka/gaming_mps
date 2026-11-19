@@ -77,6 +77,11 @@ class Session:
     def falling(self):
         return {(x, y) for x, y, glyph in self.field() if glyph == "◆"}
 
+    def check_preview(self, visible):
+        frame = self.screen.text()
+        assert ("СЛЕДУЮЩАЯ" in frame) == visible
+        assert frame.count("◆") - len(self.falling()) == (4 if visible else 0)
+
     def field(self):
         left = FIELD_X + (FIELD_WIDTH - CELL_WIDTH * BOARD_COLUMNS) // 2
         top = FIELD_Y + (FIELD_HEIGHT - BOARD_ROWS) // 2
@@ -93,9 +98,11 @@ class Session:
                               for row in self.screen.text().splitlines()),
                   f"difficulty {difficulty}")
         self.click_option("Начать игру")
-        self.wait(lambda: len(self.falling()) == 4 and "Счёт: 0" in self.screen.text(),
+        self.wait(lambda: len(self.falling()) == 4 and "Заработок: 0" in self.screen.text(),
                   "a fresh Tetris board")
         self.text("До уровня: 10")
+        self.text("ЗАКАЗЫ ШАХТЫ")
+        self.text("Оплата")
 
 
 def play_demo(session, input_code, emitted_code):
@@ -108,29 +115,30 @@ def play_demo(session, input_code, emitted_code):
     session.text("Убери 1 ряд")
     assert session.code() == emitted_code
     assert any(glyph == "◇" for _, _, glyph in session.field())
-    assert "СЛЕДУЮЩАЯ" in session.screen.text()
+    session.check_preview(visible=True)
     for placed, (position, steps, lines) in enumerate(DEMO_MOVES, 1):
         session.key(position + b"s" * steps)
         expected_cells = 4 * placed - 10 * lines
         session.wait(lambda: sum(glyph in "▪*" for _, _, glyph in session.field()) == expected_cells,
                      f"figure {placed} to lock with {lines} cleared lines")
         if placed == 4:
-            session.text("Счёт: 175")
+            session.text("Заработок: 175")
             session.text("ЗОЛОТАЯ ЖИЛА")
             session.text("Осталось фигур: 6")
+            session.text("Работа оплачена")
             assert sum(glyph == "*" for _, _, glyph in session.field()) == 1
             session.screen.snapshot(SCREENS, "tetris-gold")
         elif placed == 7:
             session.text("Жила взята!")
-            session.text("Счёт: 525")
-            session.text("Наград: 2")
+            session.text("Заработок: 525")
+            session.text("Оплат: 2")
     session.text("Уровень: 2")
     session.text("Линии: 10")
     session.screen.snapshot(SCREENS, "tetris-level-2")
     session.key(b"r")
     session.text("Убери 1 ряд")
     session.text("Уровень: 1")
-    session.text("Наград: 0")
+    session.text("Оплат: 0")
     assert session.code() == emitted_code
     session.key(b"q")
     session.text("Выбери игру")
@@ -142,6 +150,7 @@ def main():
         session = Session(qemu.serial)
         session.text("Выбери игру")
         session.start(b"a", "Лёгкая")
+        session.check_preview(visible=True)
         original_code = session.code()
         assert original_code.startswith("P2-")
         initial = session.falling()
@@ -166,12 +175,15 @@ def main():
         session.text("Выбери игру")
 
         session.start(b"d", "Средняя")
+        session.check_preview(visible=True)
         assert session.code() != original_code
         session.screen.snapshot(SCREENS, "tetris-normal")
         session.key(b"q")
         session.text("Выбери игру")
 
         session.start(b"d", "Сложная")
+        session.check_preview(visible=False)
+        session.screen.snapshot(SCREENS, "tetris-hard")
         hard_code = session.code()
         for _ in range(20):
             session.key(b"s" * 16)
@@ -181,12 +193,13 @@ def main():
         session.text("Партия окончена")
         session.key(b"r")
         session.wait(lambda: len(session.falling()) == 4, "restarting after game over")
+        session.check_preview(visible=False)
         assert session.code() == hard_code
         session.key(b"q")
         session.text("Выбери игру")
         play_demo(session, DEMO_P2, DEMO_P2)
         print("PASS: P2 challenge and deterministic replay")
-    print("PASS: ESP32 UART and menu, all difficulties, pause, replay, loss, bounty, gold and level 2")
+    print("PASS: ESP32 UART, all difficulties, preview on easy/normal, pause, replay, loss, orders and level 2")
 
 
 if __name__ == "__main__":
