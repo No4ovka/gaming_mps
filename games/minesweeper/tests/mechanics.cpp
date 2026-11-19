@@ -22,7 +22,7 @@ struct Tile {
     int width;
     int height;
 };
-static constexpr Tile tiles[] = {{7, 3}, {6, 2}, {5, 2}, {4, 2}, {4, 1}};
+static constexpr Tile tiles[] = {{4, 2}, {4, 2}, {4, 2}, {3, 2}, {3, 1}};
 static constexpr std::string_view closed = "▪";
 
 /** @brief Возвращает событие мыши в заданной точке клетки. */
@@ -44,7 +44,7 @@ static std::string frame(const Minesweeper& game) {
 /** @brief Считывает глиф в центре плитки, учитывая одноколоночный UTF-8. */
 static std::string_view cellGlyph(std::string_view frame, int size, int x, int y) {
     const auto tile = tiles[(size - 8) / 2];
-    const auto marker = mouse(InputType::None, size, x, y, (tile.width - 2) / 2, (tile.height - 1) / 2);
+    const auto marker = mouse(InputType::None, size, x, y, (tile.width - 2) / 2);
     std::size_t byte = 0;
     for (int row = 0; row < Screen::fieldY + marker.y; ++row) {
         byte = frame.find('\n', byte) + 1;
@@ -82,7 +82,7 @@ static void auditField(Settings settings, int expectedMines) {
     CHECK(!mine[settings.firstY * size + settings.firstX]);
 
     game.start(settings);
-    CHECK(frame(game).find("Мин: " + std::to_string(expectedMines)) != std::string::npos);
+    CHECK(frame(game).find("Динамиты: " + std::to_string(expectedMines)) != std::string::npos);
     game.update(1250);
     CHECK(game.result().timeMs == 1250);
     for (int y = 0; y < size; ++y) {
@@ -90,7 +90,8 @@ static void auditField(Settings settings, int expectedMines) {
             if (!mine[y * size + x]) game.handle(mouse(InputType::PointerLeft, size, x, y));
         }
     }
-    CHECK(game.result().state == State::Won && game.result().score == 0);
+    CHECK(game.result().state == State::Won &&
+          game.result().score == static_cast<unsigned>(size * size - expectedMines));
 
     const auto solved = frame(game);
     for (int y = 0; y < size; ++y) {
@@ -142,12 +143,12 @@ static void auditInput() {
     game.handle(mouse(InputType::PointerLeft, size, size - 1, size - 1));
     game.update(3200);
     CHECK(game.result().timeMs == 0 && game.result().firstX == -1);
-    CHECK(frame(game).find("Флагов: 256") != std::string::npos);
-    CHECK(frame(game).find("Осталось мин: -218") != std::string::npos);
+    CHECK(frame(game).find("Банданы: 256") != std::string::npos);
+    CHECK(game.result().score == 0);
     for (int i = 0; i < size * size; ++i) {
         game.handle(mouse(InputType::PointerRight, size, i % size, i / size));
     }
-    CHECK(frame(game).find("Флагов: 0") != std::string::npos);
+    CHECK(frame(game).find("Банданы: 0") != std::string::npos);
     game.handle({InputType::Open});
     CHECK(game.result().state == State::Playing);
     CHECK(game.result().firstX == size - 1 && game.result().firstY == size - 1);
@@ -179,7 +180,7 @@ static void auditMenu() {
     game.handle(mouse(InputType::PointerRight, 8, 0, 0));
     game.handle(mouse(InputType::PointerLeft, 8, 0, 1));
     const auto revealed = frame(game);
-    CHECK(cellGlyph(revealed, 8, 0, 0) == "F");
+    CHECK(cellGlyph(revealed, 8, 0, 0) == "▼");
     CHECK(cellGlyph(revealed, 8, 0, 1) == " ");
     CHECK(cellGlyph(revealed, 8, 1, 0) != closed);
     CHECK(cellGlyph(revealed, 8, 0, 3) != closed);
@@ -205,6 +206,9 @@ static void auditMenu() {
     const auto code = encodeCode(GameId::Minesweeper, recorded);
     CHECK(!code.empty() && screen.plain().find(code) != std::string::npos);
     const auto original = frame(game);
+    const auto openingScore = game.result().score;
+    CHECK(openingScore > 0);
+    CHECK(original.find("Счёт: " + std::to_string(openingScore)) != std::string::npos);
 
     menu.update(0);
     menu.update(1500);
@@ -212,7 +216,7 @@ static void auditMenu() {
     menu.update(5000);
     CHECK(game.result().timeMs == 1500);
     menu.handle({InputType::Restart});
-    CHECK(game.result().timeMs == 0 && frame(game) == original);
+    CHECK(game.result().timeMs == 0 && game.result().score == openingScore && frame(game) == original);
     menu.handle({InputType::Back});
     menu.draw(screen);
     CHECK(screen.plain().find("Выбери игру") != std::string::npos);
@@ -234,11 +238,16 @@ static void auditChord() {
     game.start(settings);
     CHECK(cellGlyph(frame(game), 8, 3, 2) == "1");
     CHECK(cellGlyph(frame(game), 8, 4, 1) == closed);
+    const auto initialScore = game.result().score;
+    CHECK(initialScore > 0);
     game.handle(clue);
+    CHECK(game.result().score == initialScore);
     CHECK(cellGlyph(frame(game), 8, 4, 1) == closed);
 
     game.handle(mouse(InputType::PointerRight, 8, 3, 1));
+    CHECK(game.result().score == initialScore);
     game.handle(clue);
+    CHECK(game.result().score > initialScore);
     CHECK(game.result().state == State::Playing);
     CHECK(cellGlyph(frame(game), 8, 4, 1) != closed);
 
@@ -292,5 +301,5 @@ int main() {
     auditMenu();
     auditChord();
     std::cout << "PASS: 15 profiles, mine counts, numbers, wins and losses, input, flood fill, "
-                 "flags, timing, pause, restart, replay code, chord and return to menu.\n";
+                 "flags, score, timing, pause, restart, replay code, chord and return to menu.\n";
 }

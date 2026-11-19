@@ -17,7 +17,7 @@ P2_PATTERN = re.compile(r"P2-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{5}")
 
 # Match Screen::fieldX, fieldY, width and height.
 FIELD_X, FIELD_Y, FIELD_WIDTH, FIELD_HEIGHT = 2, 5, 72, 30
-SIZE, CELL_WIDTH, CELL_HEIGHT = 8, 7, 3
+SIZE, CELL_WIDTH, CELL_HEIGHT = 8, 4, 2
 CLOSED = "▪"
 
 
@@ -37,7 +37,7 @@ def cell_position(x, y):
 def cell_marker(x, y):
     """Return the console position of the glyph inside a tile."""
     column, row = cell_position(x, y)
-    return column + (CELL_WIDTH - 2) // 2, row + (CELL_HEIGHT - 1) // 2
+    return column + (CELL_WIDTH - 2) // 2, row
 
 
 def cell_click(x, y, right=False, dx=0, dy=0):
@@ -72,16 +72,22 @@ def main():
         session.send(b"ss\r", "Поле: 8x8")
         assert board(model) == CLOSED * 64
         assert "Код после первого открытия" in model.text()
-        assert "ШАХТА САЛУНА" in model.text() and "СВОДКА ШАХТЫ" in model.text()
+        assert "ДИНАМИТНАЯ ДОЛИНА" in model.text()
+        assert model.text().splitlines()[5][77:98].startswith("Счёт: 0")
+        assert "Динамиты: 10" in model.text() and "Enter/ЛКМ" not in model.text()
 
-        session.send(cell_click(7, 7, right=True, dx=CELL_WIDTH - 1, dy=CELL_HEIGHT - 1), "Флагов: 1")
-        assert board(model)[-1] == "F"
-        session.send(cell_click(7, 7) + cell_click(7, 7, right=True), "Флагов: 0")
+        session.send(cell_click(7, 7, right=True, dx=CELL_WIDTH - 1, dy=CELL_HEIGHT - 1), "Банданы: 1")
+        assert board(model)[-1] == "▼" and "Счёт: 0" in model.text()
+        flag_x, flag_y = cell_marker(7, 7)
+        assert model.cells[flag_y][flag_x][1] == 167  # Theme::red
+        session.send(cell_click(7, 7) + cell_click(7, 7, right=True), "Банданы: 0")
         assert board(model) == CLOSED * 64
 
         session.send(b"\x1b[D\r", "Копировать [C]")
         session.wait("Копировать [C]", condition=lambda m: board(m)[62] != CLOSED)
         initial_board = board(model)
+        opening_score = initial_board.count(" ") + sum(initial_board.count(str(i)) for i in range(1, 9))
+        assert f"Счёт: {opening_score}" in model.text()
         code = P2_PATTERN.search(model.text()).group()
         session.wait("Время, с: 1")
         session.send(b"p", "Пауза")
@@ -99,21 +105,22 @@ def main():
 
         # On this board cell (3, 2) is an open 1 next to the mine at (3, 1).
         target_x, target_y = cell_marker(4, 1)
-        closed_color = model.cells[target_y][target_x][2]
+        closed_color = model.cells[target_y][target_x][1]
         hover_clue = mouse_bytes(35, *cell_position(3, 2))
-        session.send(hover_clue, "Ещё флагов: 1")
-        preview_color = model.cells[target_y][target_x][2]
-        assert preview_color != closed_color
-        session.send(cell_click(3, 1, right=True), "Флагов: 1")
-        session.send(hover_clue, "Можно раскрыть")
-        assert model.cells[target_y][target_x][2] != preview_color
+        session.send(hover_clue)
+        session.wait("Поле: 8x8", condition=lambda m: m.cells[target_y][target_x][1] != closed_color)
+        preview_color = model.cells[target_y][target_x][1]
+        session.send(cell_click(3, 1, right=True), "Банданы: 1")
+        session.send(hover_clue)
+        session.wait("Поле: 8x8", condition=lambda m: m.cells[target_y][target_x][1] == 179)
+        assert model.cells[target_y][target_x][1] != preview_color
         assert board(model)[12] == CLOSED
         session.send(cell_click(3, 2))
         session.wait("Поле: 8x8", condition=lambda m: board(m)[12] != CLOSED)
 
         session.send(b"r", "Поле: 8x8")
-        session.wait("Флагов: 0", condition=lambda m: board(m) == legacy_board)
-        session.send(cell_click(4, 1, right=True), "Флагов: 1")
+        session.wait("Банданы: 0", condition=lambda m: board(m) == legacy_board)
+        session.send(cell_click(4, 1, right=True), "Банданы: 1")
         session.send(cell_click(3, 2), "Партия окончена")
         session.send(b"r", "Поле: 8x8")
         session.send(cell_click(2, 0), "Партия окончена")
@@ -122,10 +129,12 @@ def main():
         safe_clicks = b"".join(cell_click(i % SIZE, i // SIZE)
                                for i in range(SIZE * SIZE) if i not in MINES)
         session.send(safe_clicks, "Уровень пройден")
+        assert "Счёт: 54" in model.text()
         session.send(b"\r", "Поле: 10x10")
-        assert "Мин: 15" in model.text() and "Код после первого открытия" in model.text()
+        assert "Динамиты: 15" in model.text() and "Код после первого открытия" in model.text()
+        assert "Счёт: 0" in model.text()
         session.send(b"q", "Выбери игру")
-    print("PASS: ESP32/QEMU, large tiles, keyboard, mouse, flags, P2 replay, chord, win, loss and next board.")
+    print("PASS: ESP32/QEMU, compact board, keyboard, mouse, red bandanas, score, P2 replay, chord, win, loss and next board.")
 
 
 if __name__ == "__main__":
