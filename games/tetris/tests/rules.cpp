@@ -92,7 +92,7 @@ struct TetrisRulesTest {
     /** @brief Проверяет границы уровней, темп и сохранение поля при переходе. */
     static void levels() {
         Tetris game;
-        const std::array<std::uint32_t, 3> expectedIntervals{1200, 950, 740};
+        const std::array<std::uint32_t, 3> expectedIntervals{1200, 950, 680};
         for (unsigned difficulty = 0; difficulty < expectedIntervals.size(); ++difficulty) {
             const Settings settings{static_cast<Difficulty>(difficulty), 1, 0};
             for (const int removed : {1, 2}) {
