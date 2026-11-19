@@ -238,11 +238,12 @@ void Minesweeper::drawCell(Screen& screen, const Layout& layout, Point position,
     const int y = layout.origin.y + position.y * height;
     const int glyphY = y + (height - 1) / 2;
     screen.fill(x, y, width, height, background);
-    // Sub-character separators leave almost the entire square face available.
+    // Use the same box-drawing characters as the outer frame.
     for (int row = 0; row < height; ++row)
-        screen.glyph(x + width - 1, y + row, Theme::background, background, U'▕');
+        screen.glyph(x + width - 1, y + row, Theme::background, background, U'│');
     for (int column = 0; column < width; ++column)
-        screen.glyph(x + column, y + height - 1, Theme::background, background, U'▁');
+        screen.glyph(x + column, y + height - 1, Theme::background, background, U'─');
+    screen.glyph(x + width - 1, y + height - 1, Theme::background, background, U'┼');
     screen.glyph(x + (width - 1) / 2, glyphY, foreground, background, glyph);
     if (finished && cell.flag) screen.text(x + width - 1, glyphY, cell.mine ? "▼" : "!", Theme::red);
 }
