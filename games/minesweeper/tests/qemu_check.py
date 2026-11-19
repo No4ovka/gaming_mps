@@ -18,8 +18,10 @@ P2_PATTERN = re.compile(r"P2-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{5}")
 # Match Screen::fieldX, fieldY, width and height.
 FIELD_X, FIELD_Y, FIELD_WIDTH, FIELD_HEIGHT = 2, 5, 72, 30
 SIZE = 8
-BOARD_X, BOARD_Y = FIELD_X + 2, FIELD_Y + 1
-BOARD_WIDTH, BOARD_HEIGHT = FIELD_WIDTH - 4, FIELD_HEIGHT - 2
+CELL_WIDTH, CELL_HEIGHT = (FIELD_WIDTH - 4) // SIZE, (FIELD_HEIGHT - 2) // SIZE
+BOARD_WIDTH, BOARD_HEIGHT = CELL_WIDTH * SIZE, CELL_HEIGHT * SIZE
+BOARD_X = FIELD_X + (FIELD_WIDTH - BOARD_WIDTH) // 2
+BOARD_Y = FIELD_Y + (FIELD_HEIGHT - BOARD_HEIGHT) // 2
 CLOSED = "▪"
 
 
@@ -30,14 +32,13 @@ def click(x, y, right=False):
 
 
 def cell_size(x, y):
-    """Return the span between adjacent proportional tile boundaries."""
-    return ((x + 1) * BOARD_WIDTH // SIZE - x * BOARD_WIDTH // SIZE,
-            (y + 1) * BOARD_HEIGHT // SIZE - y * BOARD_HEIGHT // SIZE)
+    """Return the uniform cell dimensions for this board."""
+    return CELL_WIDTH, CELL_HEIGHT
 
 
 def cell_position(x, y):
     """Return the top-left console coordinates of a scaled tile."""
-    return BOARD_X + x * BOARD_WIDTH // SIZE, BOARD_Y + y * BOARD_HEIGHT // SIZE
+    return BOARD_X + x * CELL_WIDTH, BOARD_Y + y * CELL_HEIGHT
 
 
 def cell_marker(x, y):

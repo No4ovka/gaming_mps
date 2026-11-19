@@ -27,13 +27,12 @@ struct Tile {
 };
 static constexpr std::string_view closed = "▪";
 
-/** @brief Вычисляет ожидаемые границы по доле игровой области. */
+/** @brief Вычисляет ожидаемые одинаковые клетки, центрированные в игровой области. */
 static Tile tileAt(int size, int x, int y) {
-    constexpr int width = Screen::width - 4;
-    constexpr int height = Screen::height - 2;
-    const int left = x * width / size;
-    const int top = y * height / size;
-    return {2 + left, 1 + top, (x + 1) * width / size - left, (y + 1) * height / size - top};
+    const int width = (Screen::width - 4) / size;
+    const int height = (Screen::height - 2) / size;
+    return {(Screen::width - size * width) / 2 + x * width,
+            (Screen::height - size * height) / 2 + y * height, width, height};
 }
 
 /** @brief Возвращает событие мыши в заданной точке клетки. */
@@ -313,9 +312,11 @@ static void auditHitboxes() {
         settings.level = level;
         const int size = 6 + 2 * static_cast<int>(level);
         game.start(settings);
+        const auto first = tileAt(size, 0, 0);
         for (int y = 0; y < Screen::height; ++y) {
             for (int x = 0; x < Screen::width; ++x) {
-                if (x >= 2 && x < Screen::width - 2 && y >= 1 && y < Screen::height - 1) continue;
+                if (x >= first.x && x < first.x + size * first.width &&
+                    y >= first.y && y < first.y + size * first.height) continue;
                 game.handle({InputType::PointerLeft, static_cast<std::int16_t>(x), static_cast<std::int16_t>(y)});
             }
         }
@@ -323,6 +324,7 @@ static void auditHitboxes() {
         for (int y = 0; y < size; ++y) {
             for (int x = 0; x < size; ++x) {
                 const auto tile = tileAt(size, x, y);
+                CHECK(tile.width == first.width && tile.height == first.height);
                 for (int dy = 0; dy < tile.height; ++dy) {
                     for (int dx = 0; dx < tile.width; ++dx) {
                         game.start(settings);

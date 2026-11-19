@@ -54,10 +54,9 @@ int Minesweeper::index(Point position) const {
 }
 
 Minesweeper::Layout Minesweeper::boardLayout() const {
-    constexpr int horizontalMargin = 2;
-    constexpr int verticalMargin = 1;
-    return {{horizontalMargin, verticalMargin}, Screen::width - 2 * horizontalMargin,
-            Screen::height - 2 * verticalMargin};
+    const int width = ((Screen::width - 4) / size_) * size_;
+    const int height = ((Screen::height - 2) / size_) * size_;
+    return {{(Screen::width - width) / 2, (Screen::height - height) / 2}, width, height};
 }
 
 Minesweeper::Point Minesweeper::pointerCell(const Input& input) const {
@@ -65,7 +64,7 @@ Minesweeper::Point Minesweeper::pointerCell(const Input& input) const {
     const int x = input.x - layout.origin.x;
     const int y = input.y - layout.origin.y;
     if (x < 0 || x >= layout.width || y < 0 || y >= layout.height) return {};
-    return {((x + 1) * size_ - 1) / layout.width, ((y + 1) * size_ - 1) / layout.height};
+    return {x / (layout.width / size_), y / (layout.height / size_)};
 }
 
 template<typename Action>
@@ -229,10 +228,10 @@ void Minesweeper::drawCell(Screen& screen, const Layout& layout, Point position,
         background = Theme::wood;
     }
 
-    const int x = layout.origin.x + position.x * layout.width / size_;
-    const int y = layout.origin.y + position.y * layout.height / size_;
-    const int width = (position.x + 1) * layout.width / size_ - position.x * layout.width / size_;
-    const int height = (position.y + 1) * layout.height / size_ - position.y * layout.height / size_;
+    const int width = layout.width / size_;
+    const int height = layout.height / size_;
+    const int x = layout.origin.x + position.x * width;
+    const int y = layout.origin.y + position.y * height;
     const int faceWidth = width - 1;
     const int faceHeight = std::max(1, height - 1);
     const int glyphY = y + (faceHeight - 1) / 2;
