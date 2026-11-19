@@ -57,6 +57,13 @@ constexpr std::array<std::uint32_t, 5> points{0, 100, 300, 500, 800}; ///< Оч�
 constexpr std::array<std::uint32_t, 3> baseIntervals{1200, 950, 740}; ///< Начальные интервалы по сложности.
 constexpr std::uint32_t linesPerLevel = 10; ///< Сколько удалённых рядов нужно для следующего уровня.
 constexpr std::uint32_t minInterval = 100; ///< Ограничение скорости на высоких уровнях, в мс.
+constexpr std::uint32_t noticeDuration = 1200; ///< Длительность подсветки сообщения в мс.
+constexpr unsigned goldMoves = 6; ///< Сколько фиксаций можно сделать, чтобы убрать жилу.
+constexpr std::uint32_t firstReward = 75; ///< Награда за первую линию.
+constexpr std::uint32_t doubleReward = 150; ///< Награда за две линии с одной фигуры.
+constexpr std::uint32_t goldReward = 250; ///< Награда за золотую жилу.
+constexpr std::uint32_t streakReward = 200; ///< Награда за две очистки подряд.
+constexpr std::uint32_t comboRate = 50; ///< Очки за каждый шаг серии сверх первой очистки.
 constexpr std::array<std::string_view, 3> difficultyNames{
     "Лёгкая", "Средняя", "Сложная"
 }; ///< Названия сложности на панели.
@@ -76,9 +83,17 @@ void Tetris::start(const Settings& settings) {
     rng_ = settings.seed;
     fallMs_ = 0;
     lines_ = 0;
+    combo_ = 0;
+    rewards_ = 0;
+    noticeMs_ = 0;
+    contract_ = Contract::First;
+    notice_ = Notice::None;
+    streakStarted_ = false;
+    gold_ = {};
     difficulty_ = settings.difficulty;
     result_ = {};
     result_.level = std::max(std::uint32_t{1}, settings.level);
+    next_ = takeShape();
     spawn();
 }
 
@@ -104,6 +119,7 @@ void Tetris::update(std::uint32_t ms) {
         const auto step = std::min(ms, interval - fallMs_);
         fallMs_ += step;
         result_.timeMs += step;
+        noticeMs_ -= std::min(noticeMs_, step);
         ms -= step;
         if (fallMs_ == interval) {
             fallMs_ = 0;
@@ -113,34 +129,124 @@ void Tetris::update(std::uint32_t ms) {
 }
 
 void Tetris::draw(Screen& screen) const {
+    drawSaloon(screen);
+    drawField(screen);
+    drawContract(screen);
+
+    screen.panelText(0, "* КАССА САЛУНА *", Theme::accent);
+    screen.panelNumber(2, "Счёт:", result_.score);
+    screen.panelNumber(4, "Линии:", lines_);
+    screen.panelNumber(6, "Уровень:", result_.level);
+    screen.panelNumber(7, "До уровня:", linesPerLevel - lines_ % linesPerLevel, Theme::muted);
+    screen.panelText(9, "Сложность", Theme::muted);
+    screen.panelText(10, difficultyNames[static_cast<unsigned>(difficulty_)]);
+    screen.panelNumber(12, "Серия:", combo_, combo_ > 1 ? Theme::accent : Theme::text);
+    screen.panelNumber(13, "Наград:", rewards_);
+    if (noticeMs_ != 0) {
+        constexpr std::array<std::string_view, 6> messages{
+            "", "Очистка!", "Темп вырос!", "Награда выплачена", "Жила взята!", "Время жилы вышло"
+        };
+        screen.panelText(16, messages[static_cast<unsigned>(notice_)],
+                         notice_ == Notice::Missed ? Theme::orange : Theme::accent);
+    }
+}
+
+void Tetris::drawField(Screen& screen) const {
     const int left = Screen::boardX(columns);
     const int top = Screen::boardY(rows);
+    const bool spark = notice_ != Notice::Missed && noticeMs_ > 700 && (noticeMs_ / 90) % 2 == 1;
     for (int y = 0; y < rows; ++y) {
-        screen.text(left - 1, top + y, "│", Theme::border);
-        screen.text(left + 2 * columns, top + y, "│", Theme::border);
+        const bool brace = y % 5 == 4;
+        const Color rail = spark ? Theme::accent : Theme::border;
+        screen.text(left - 2, top + y, brace ? "+│" : "▒│", rail, Theme::wood);
+        screen.text(left + 2 * columns, top + y, brace ? "│+" : "│▒", rail, Theme::wood);
         for (int x = 0; x < columns; ++x) {
             const auto value = board_[y][x];
-            if (value != 0) {
-                screen.cell(left + 2 * x, top + y, Theme::background, colors[value - 1], U'▪');
+            const int cellX = left + 2 * x;
+            if (x == gold_.x && y == gold_.y) {
+                screen.cell(cellX, top + y, Theme::ink, Theme::accent, U'*');
+            } else if (value != 0) {
+                screen.cell(cellX, top + y, Theme::background, colors[value - 1], U'▪');
+            } else if (brace) {
+                screen.cell(cellX, top + y, Theme::border, Theme::background, U'·');
             }
         }
     }
     if (result_.state == State::Playing) {
-        const auto activeMask = masks[active_.shape][active_.rotation];
-        for (int y = 0; y < maskSide; ++y) {
-            for (int x = 0; x < maskSide; ++x) {
-                if (activeMask & bit(x, y)) {
-                    screen.cell(left + 2 * (active_.x + x), top + active_.y + y,
-                                Theme::background, colors[active_.shape], U'◆');
-                }
+        drawPiece(screen, landing(), left, top, true);
+        drawPiece(screen, active_, left, top);
+    }
+}
+
+void Tetris::drawPiece(Screen& screen, const Piece& piece, int left, int top, bool ghost) const {
+    const auto occupied = masks[piece.shape][piece.rotation];
+    for (int y = 0; y < maskSide; ++y) {
+        for (int x = 0; x < maskSide; ++x) {
+            if (occupied & bit(x, y)) {
+                screen.cell(left + 2 * (piece.x + x), top + piece.y + y,
+                            ghost ? Theme::muted : Theme::background,
+                            ghost ? Theme::background : colors[piece.shape], ghost ? U'◇' : U'◆');
             }
         }
     }
-    screen.panelNumber(0, "Счёт:", result_.score);
-    screen.panelNumber(2, "Линии:", lines_);
-    screen.panelNumber(4, "Уровень:", result_.level);
-    screen.panelText(6, difficultyNames[static_cast<unsigned>(difficulty_)], Theme::muted);
-    screen.panelNumber(8, "До уровня:", linesPerLevel - lines_ % linesPerLevel, Theme::muted);
+}
+
+void Tetris::drawSaloon(Screen& screen) const {
+    screen.fill(0, 1, 14, 3, Theme::wood);
+    screen.text(1, 1, "* ТРИ СТВОЛА", Theme::white, Theme::wood);
+    screen.text(1, 2, "    САЛУН", Theme::white, Theme::wood);
+    screen.text(1, 5, "СЛЕДУЮЩАЯ", Theme::accent);
+    screen.frame(1, 6, 12, 5, Theme::border);
+    drawPiece(screen, Piece{next_, 0, 0, 0}, 3, 7);
+    screen.text(1, 12, "A/D  сдвиг", Theme::muted);
+    screen.text(1, 13, "W    поворот", Theme::muted);
+    screen.text(1, 14, "S    вниз", Theme::muted);
+    screen.text(1, 16, "    _", Theme::green);
+    screen.text(1, 17, " | | |", Theme::green);
+    screen.text(1, 18, " |_| | |", Theme::green);
+    screen.text(1, 19, "___| |_|__", Theme::muted);
+}
+
+void Tetris::drawContract(Screen& screen) const {
+    constexpr int left = 38;
+    screen.fill(left, 2, 14, 10, Theme::paper);
+    screen.fill(left, 2, 14, 2, Theme::wood);
+    screen.text(left + 2, 2, "* РОЗЫСК *", Theme::white, Theme::wood);
+    const auto line = [&](int row, std::string_view text, Color color = Theme::ink) {
+        screen.text(left + 1, row, text, color, Theme::paper);
+    };
+    std::uint32_t reward = 0;
+    switch (contract_) {
+        case Contract::First:
+            line(5, "Убери 1 ряд");
+            reward = firstReward;
+            break;
+        case Contract::Gold:
+            line(4, "ЗОЛОТАЯ ЖИЛА", Theme::paperMuted);
+            line(6, "Закрой ряд");
+            line(7, "со знаком *");
+            if (gold_.moves != 0) {
+                line(9, "Фигур:", Theme::paperMuted);
+                screen.number(left + 8, 9, gold_.moves, Theme::ink, Theme::paper);
+            } else {
+                line(9, "Ищем жилу", Theme::paperMuted);
+            }
+            reward = goldReward;
+            break;
+        case Contract::Double:
+            line(5, "Два ряда");
+            line(6, "за фигуру");
+            reward = doubleReward;
+            break;
+        case Contract::Streak:
+            line(5, "Две очистки");
+            line(6, "подряд");
+            line(8, streakStarted_ ? "1 из 2" : "0 из 2", Theme::paperMuted);
+            reward = streakReward;
+            break;
+    }
+    line(10, "Награда", Theme::paperMuted);
+    screen.number(left + 9, 10, reward, Theme::ink, Theme::paper);
 }
 
 Result Tetris::result() const {
@@ -204,12 +310,21 @@ void Tetris::lock() {
             }
         }
     }
-    const unsigned removed = clearLines();
+    const Clear cleared = clearLines();
+    const unsigned removed = cleared.count;
     const auto previousThreshold = lines_ / linesPerLevel;
     lines_ = std::min(lines_, std::numeric_limits<std::uint32_t>::max() - removed) + removed;
     addScore(std::uint64_t{points[removed]} * result_.level);
     const auto gained = lines_ / linesPerLevel - previousThreshold;
     result_.level = std::min(result_.level, std::numeric_limits<std::uint32_t>::max() - gained) + gained;
+    if (removed == 0) {
+        combo_ = 0;
+    } else {
+        combo_ = std::min(combo_, std::numeric_limits<std::uint32_t>::max() - 1) + 1;
+        addScore(std::uint64_t{combo_ - 1} * comboRate);
+        showNotice(gained ? Notice::Level : Notice::Clear);
+    }
+    updateContract(cleared);
     spawn();
 }
 
@@ -218,25 +333,108 @@ void Tetris::addScore(std::uint64_t pointsEarned) {
         std::uint64_t{result_.score} + pointsEarned, std::uint64_t{std::numeric_limits<std::uint32_t>::max()}));
 }
 
-unsigned Tetris::clearLines() {
+Tetris::Clear Tetris::clearLines() {
+    Clear cleared;
     int destination = rows - 1;
+    const int goldSource = gold_.y;
     for (int source = rows - 1; source >= 0; --source) {
         const Row& row = board_[source];
         if (std::all_of(row.begin(), row.end(), [](auto value) { return value != 0; })) {
+            if (source == goldSource) {
+                cleared.gold = true;
+                gold_.y = -1;
+            }
             continue;
+        }
+        if (source == goldSource) {
+            gold_.y = destination;
         }
         board_[destination] = row;
         --destination;
     }
-    const auto removed = static_cast<unsigned>(destination + 1);
-    std::fill_n(board_.begin(), removed, Row{});
-    return removed;
+    cleared.count = static_cast<unsigned>(destination + 1);
+    std::fill_n(board_.begin(), cleared.count, Row{});
+    return cleared;
+}
+
+void Tetris::updateContract(const Clear& cleared) {
+    switch (contract_) {
+        case Contract::First:
+            if (cleared.count > 0) {
+                payReward(Contract::Gold, firstReward, Notice::Paid);
+            }
+            break;
+        case Contract::Gold:
+            if (cleared.gold) {
+                payReward(Contract::Double, goldReward, Notice::GoldPaid);
+            } else if (gold_.y < 0) {
+                markGold();
+            } else if (--gold_.moves == 0) {
+                gold_ = {};
+                contract_ = Contract::Double;
+                showNotice(Notice::Missed);
+            }
+            break;
+        case Contract::Double:
+            if (cleared.count >= 2) {
+                payReward(Contract::Streak, doubleReward, Notice::Paid);
+            }
+            break;
+        case Contract::Streak:
+            if (streakStarted_ && cleared.count > 0) {
+                payReward(Contract::Gold, streakReward, Notice::Paid);
+            } else {
+                streakStarted_ = cleared.count > 0;
+            }
+            break;
+    }
+}
+
+void Tetris::markGold() {
+    int mostFilled = 0;
+    for (int y = rows - 1; y >= 0; --y) {
+        const auto& row = board_[y];
+        const int filled = std::count_if(row.begin(), row.end(), [](auto value) { return value != 0; });
+        if (filled > mostFilled) {
+            mostFilled = filled;
+            const auto cell = std::find_if(row.begin(), row.end(), [](auto value) { return value != 0; });
+            gold_ = Gold{static_cast<int>(cell - row.begin()), y, goldMoves};
+        }
+    }
+}
+
+void Tetris::payReward(Contract next, std::uint32_t pointsEarned, Notice notice) {
+    addScore(pointsEarned);
+    rewards_ = std::min(rewards_, std::numeric_limits<std::uint32_t>::max() - 1) + 1;
+    streakStarted_ = false;
+    gold_ = {};
+    contract_ = next;
+    if (next == Contract::Gold) {
+        markGold();
+    }
+    showNotice(notice);
+}
+
+void Tetris::showNotice(Notice notice) {
+    notice_ = notice;
+    noticeMs_ = noticeDuration;
+}
+
+Tetris::Piece Tetris::landing() const {
+    Piece probe = active_;
+    do {
+        ++probe.y;
+    } while (fits(probe));
+    --probe.y;
+    return probe;
 }
 
 void Tetris::spawn() {
-    active_ = Piece{takeShape(), 0, (columns - maskSide) / 2, 0};
+    active_ = Piece{next_, 0, (columns - maskSide) / 2, 0};
     if (!fits(active_)) {
         result_.state = State::Lost;
+    } else {
+        next_ = takeShape();
     }
 }
 

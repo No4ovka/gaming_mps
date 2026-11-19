@@ -65,6 +65,7 @@ struct TetrisRulesTest {
         for (int count = 1; count <= 4; ++count) {
             Tetris game;
             game.start({});
+            game.contract_ = Tetris::Contract::Gold;
             game.active_ = Tetris::Piece{0, 1, 3, 16};
             game.board_[14][0] = 2;
             for (int row = Tetris::rows - count; row < Tetris::rows; ++row) {
@@ -99,6 +100,9 @@ struct TetrisRulesTest {
                 assert(game.fallInterval() == expectedIntervals[difficulty]);
                 for (const auto previous : {9u, 19u}) {
                     game.lines_ = previous;
+                    game.combo_ = 0;
+                    game.contract_ = Tetris::Contract::Gold;
+                    game.gold_ = {};
                     game.active_ = Tetris::Piece{0, 1, 3, 16};
                     game.board_ = {};
                     game.board_[14][0] = 2;
@@ -141,6 +145,105 @@ struct TetrisRulesTest {
         assert(whole.board_ == split.board_ && whole.rng_ == split.rng_);
         assert(whole.active_.shape == split.active_.shape && whole.active_.y == split.active_.y);
         assert(whole.result().timeMs == split.result().timeMs && whole.result().score == split.result().score);
+    }
+
+    /** @brief Проверяет проекцию, очередь и отсутствие побочных эффектов у отрисовки. */
+    static void preview() {
+        Tetris game;
+        game.start({});
+        game.board_[17][4] = 2;
+        const auto marker = game.landing();
+        const auto next = game.next_;
+        const auto rng = game.rng_;
+        const auto board = game.board_;
+        Screen screen;
+        screen.begin();
+        game.draw(screen);
+        const auto firstFrame = screen.plain();
+        assert(firstFrame.find("СЛЕДУЮЩАЯ") != std::string::npos);
+        assert(firstFrame.find("◇") != std::string::npos);
+        screen.begin();
+        game.draw(screen);
+        assert(firstFrame == screen.plain() && game.rng_ == rng && game.board_ == board);
+        for (int i = game.active_.y; i < marker.y; ++i) {
+            game.handle({InputType::Down});
+        }
+        assert(game.active_.y == marker.y && game.board_ == board);
+        game.handle({InputType::Down});
+        assert(game.active_.shape == next && game.board_ != board);
+    }
+
+    /** @brief Проверяет выдачу целей, перенос метки и истечение срока. */
+    static void contracts() {
+        Tetris game;
+        game.start({});
+        game.board_[18][0] = game.board_[18][4] = 2;
+        game.board_[17][1] = game.board_[17][3] = 2;
+        game.updateContract({1, false});
+        assert(game.contract_ == Tetris::Contract::Gold && game.rewards_ == 1);
+        assert(game.result().score == 75);
+        assert(game.gold_.y == 18 && game.gold_.x == 0 && game.gold_.moves == 6);
+        game.board_[19].fill(1);
+        auto cleared = game.clearLines();
+        assert(cleared.count == 1 && !cleared.gold && game.gold_.y == 19);
+        game.updateContract(cleared);
+        assert(game.gold_.moves == 5);
+        game.board_[19].fill(1);
+        game.board_[18].fill(1);
+        cleared = game.clearLines();
+        assert(cleared.count == 2 && cleared.gold);
+        game.updateContract(cleared);
+        assert(game.contract_ == Tetris::Contract::Double && game.rewards_ == 2);
+        assert(game.result().score == 325 && game.notice_ == Tetris::Notice::GoldPaid);
+
+        game.updateContract({1, false});
+        assert(game.contract_ == Tetris::Contract::Double);
+        game.updateContract({2, false});
+        assert(game.contract_ == Tetris::Contract::Streak);
+        game.updateContract({1, false});
+        assert(game.streakStarted_);
+        game.updateContract({0, false});
+        assert(!game.streakStarted_);
+        game.updateContract({1, false});
+        game.updateContract({1, false});
+        assert(game.contract_ == Tetris::Contract::Gold && game.rewards_ == 4);
+        assert(game.result().score == 675 && game.gold_.moves == 0);
+
+        game.board_[19][0] = 2;
+        game.updateContract({});
+        assert(game.gold_.moves == 6);
+        for (int i = 0; i < 6; ++i) {
+            game.updateContract({});
+        }
+        assert(game.gold_.y == -1 && game.contract_ == Tetris::Contract::Double);
+        assert(game.notice_ == Tetris::Notice::Missed && game.result().score == 675);
+        game.start({});
+        assert(game.contract_ == Tetris::Contract::First && game.gold_.y == -1);
+        assert(game.rewards_ == 0 && game.noticeMs_ == 0);
+    }
+
+    /** @brief Проверяет бонус серии, её сброс и затухание эффекта по игровому времени. */
+    static void series() {
+        Tetris game;
+        game.start({});
+        game.contract_ = Tetris::Contract::Double;
+        for (unsigned clear = 1; clear <= 2; ++clear) {
+            game.board_ = {};
+            game.board_[19].fill(1);
+            game.board_[19][5] = 0;
+            game.active_ = Tetris::Piece{0, 1, 3, 16};
+            game.handle({InputType::Down});
+            assert(game.combo_ == clear && game.noticeMs_ == 1200);
+        }
+        assert(game.result().score == 250);
+        game.board_ = {};
+        game.active_ = Tetris::Piece{0, 1, 3, 16};
+        game.handle({InputType::Down});
+        assert(game.combo_ == 0);
+        game.update(1199);
+        assert(game.noticeMs_ == 1);
+        game.update(1);
+        assert(game.noticeMs_ == 0);
     }
 
     /** @brief Проверяет деление времени, верхнюю границу и сброс после поражения. */
@@ -191,6 +294,9 @@ int main() {
     TetrisRulesTest::lines();
     TetrisRulesTest::levels();
     TetrisRulesTest::timing();
+    TetrisRulesTest::preview();
+    TetrisRulesTest::contracts();
+    TetrisRulesTest::series();
     TetrisRulesTest::lifecycle();
-    std::cout << "PASS: bags, collisions, line clearing, levels, game time, game over and reset\n";
+    std::cout << "PASS: bags, collisions, clearing, levels, ghost, preview, contracts, streaks, time and reset\n";
 }
