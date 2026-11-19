@@ -64,6 +64,7 @@ class Session:
         self.click(16)
         self.wait(lambda: len(self.falling()) == 4 and "Счёт: 0" in self.screen.text(),
                   "a fresh Tetris board")
+        self.text("До уровня: 10")
 
 
 def main():

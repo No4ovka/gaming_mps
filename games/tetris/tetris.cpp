@@ -55,6 +55,8 @@ constexpr std::array<Color, startingMasks.size()> colors{
 }; ///< Цвет заполненных клеток для I, O, T, S, Z, J, L.
 constexpr std::array<std::uint32_t, 5> points{0, 100, 300, 500, 800}; ///< Очки за очистку от 0 до 4 строк.
 constexpr std::array<std::uint32_t, 3> baseIntervals{1200, 950, 740}; ///< Начальные интервалы по сложности.
+constexpr std::uint32_t linesPerLevel = 10; ///< Сколько удалённых рядов нужно для следующего уровня.
+constexpr std::uint32_t minInterval = 100; ///< Ограничение скорости на высоких уровнях, в мс.
 constexpr std::array<std::string_view, 3> difficultyNames{
     "Лёгкая", "Средняя", "Сложная"
 }; ///< Названия сложности на панели.
@@ -76,6 +78,7 @@ void Tetris::start(const Settings& settings) {
     lines_ = 0;
     difficulty_ = settings.difficulty;
     result_ = {};
+    result_.level = std::max(std::uint32_t{1}, settings.level);
     spawn();
 }
 
@@ -137,6 +140,7 @@ void Tetris::draw(Screen& screen) const {
     screen.panelNumber(2, "Линии:", lines_);
     screen.panelNumber(4, "Уровень:", result_.level);
     screen.panelText(6, difficultyNames[static_cast<unsigned>(difficulty_)], Theme::muted);
+    screen.panelNumber(8, "До уровня:", linesPerLevel - lines_ % linesPerLevel, Theme::muted);
 }
 
 Result Tetris::result() const {
@@ -201,10 +205,17 @@ void Tetris::lock() {
         }
     }
     const unsigned removed = clearLines();
+    const auto previousThreshold = lines_ / linesPerLevel;
     lines_ = std::min(lines_, std::numeric_limits<std::uint32_t>::max() - removed) + removed;
-    result_.score = std::min(result_.score, std::numeric_limits<std::uint32_t>::max() - points[removed])
-        + points[removed];
+    addScore(std::uint64_t{points[removed]} * result_.level);
+    const auto gained = lines_ / linesPerLevel - previousThreshold;
+    result_.level = std::min(result_.level, std::numeric_limits<std::uint32_t>::max() - gained) + gained;
     spawn();
+}
+
+void Tetris::addScore(std::uint64_t pointsEarned) {
+    result_.score = static_cast<std::uint32_t>(std::min(
+        std::uint64_t{result_.score} + pointsEarned, std::uint64_t{std::numeric_limits<std::uint32_t>::max()}));
 }
 
 unsigned Tetris::clearLines() {
@@ -252,5 +263,7 @@ std::uint32_t Tetris::random() {
 }
 
 std::uint32_t Tetris::fallInterval() const {
-    return baseIntervals[static_cast<unsigned>(difficulty_)];
+    const std::uint32_t base = baseIntervals[static_cast<unsigned>(difficulty_)];
+    const auto interval = static_cast<std::uint32_t>(base * 10 / (std::uint64_t{result_.level} + 9));
+    return std::max(minInterval, interval);
 }

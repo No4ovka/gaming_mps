@@ -88,6 +88,61 @@ struct TetrisRulesTest {
         }
     }
 
+    /** @brief Проверяет границы уровней, темп и сохранение поля при переходе. */
+    static void levels() {
+        Tetris game;
+        const std::array<std::uint32_t, 3> expectedIntervals{1200, 950, 740};
+        for (unsigned difficulty = 0; difficulty < expectedIntervals.size(); ++difficulty) {
+            const Settings settings{static_cast<Difficulty>(difficulty), 1, 0};
+            for (const int removed : {1, 2}) {
+                game.start(settings);
+                assert(game.fallInterval() == expectedIntervals[difficulty]);
+                for (const auto previous : {9u, 19u}) {
+                    game.lines_ = previous;
+                    game.active_ = Tetris::Piece{0, 1, 3, 16};
+                    game.board_ = {};
+                    game.board_[14][0] = 2;
+                    for (int row = Tetris::rows - removed; row < Tetris::rows; ++row) {
+                        game.board_[row].fill(1);
+                        game.board_[row][5] = 0;
+                    }
+                    const auto speedBefore = game.fallInterval();
+                    const auto levelBefore = game.result().level;
+                    const auto scoreBefore = game.result().score;
+                    game.update(speedBefore);
+                    assert(game.lines_ == previous + static_cast<unsigned>(removed));
+                    assert(game.result().state == State::Playing && game.result().level == levelBefore + 1);
+                    assert(game.result().score == scoreBefore + (removed == 1 ? 100 : 300) * levelBefore);
+                    assert(game.board_[14 + removed][0] == 2 && game.fallInterval() < speedBefore);
+                }
+            }
+            game.start(settings);
+            assert(game.result().level == 1 && game.fallInterval() == expectedIntervals[difficulty]);
+        }
+        game.start(Settings{Difficulty::Normal, std::numeric_limits<std::uint32_t>::max(), 0});
+        assert(game.fallInterval() == 100);
+    }
+
+    /** @brief Одинаковый ввод даёт ту же партию при другом разбиении игрового времени. */
+    static void timing() {
+        const Settings settings{Difficulty::Hard, 1, 0x12345678u};
+        Tetris whole;
+        Tetris split;
+        whole.start(settings);
+        split.start(settings);
+        for (int i = 0; i < 3; ++i) {
+            whole.handle({InputType::Left});
+            split.handle({InputType::Left});
+            whole.update(12911);
+            split.update(10000);
+            split.update(2000);
+            split.update(911);
+        }
+        assert(whole.board_ == split.board_ && whole.rng_ == split.rng_);
+        assert(whole.active_.shape == split.active_.shape && whole.active_.y == split.active_.y);
+        assert(whole.result().timeMs == split.result().timeMs && whole.result().score == split.result().score);
+    }
+
     /** @brief Проверяет деление времени, верхнюю границу и сброс после поражения. */
     static void lifecycle() {
         const Settings settings{Difficulty::Normal, 1, 0};
@@ -134,6 +189,8 @@ int main() {
     TetrisRulesTest::bags();
     TetrisRulesTest::collisions();
     TetrisRulesTest::lines();
+    TetrisRulesTest::levels();
+    TetrisRulesTest::timing();
     TetrisRulesTest::lifecycle();
-    std::cout << "PASS: bags, collisions, line clearing, game time, game over and reset\n";
+    std::cout << "PASS: bags, collisions, line clearing, levels, game time, game over and reset\n";
 }
