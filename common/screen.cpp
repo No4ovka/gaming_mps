@@ -38,8 +38,8 @@ Screen::Screen(Output output, void* context)
     : output_(output ? output : writeStdout), context_(context) {}
 void Screen::begin() { next_.fill(Pixel{}); }
 void Screen::put(int x, int y, char32_t glyph, Color foreground, Color background) {
-    if (x >= 0 && x < 80 && y >= 0 && y < 30 && !(x == 79 && y == 29))
-        next_[y * 80 + x] = Pixel{glyph >= 32 ? glyph : U' ', foreground, background};
+    if (x >= 0 && x < canvasWidth && y >= 0 && y < canvasHeight && !(x == canvasWidth - 1 && y == canvasHeight - 1))
+        next_[y * canvasWidth + x] = Pixel{glyph >= 32 ? glyph : U' ', foreground, background};
 }
 void Screen::clippedText(int x, int y, std::string_view value, Color foreground, Color background,
                          int left, int top, int w, int h) {
@@ -50,7 +50,7 @@ void Screen::clippedText(int x, int y, std::string_view value, Color foreground,
     }
 }
 void Screen::canvasText(int x, int y, std::string_view value, Color foreground, Color background) {
-    clippedText(x, y, value, foreground, background, 0, 0, 80, 30);
+    clippedText(x, y, value, foreground, background, 0, 0, canvasWidth, canvasHeight);
 }
 void Screen::text(int x, int y, std::string_view value, Color foreground, Color background) {
     clippedText(x + 2, y + 5, value, foreground, background, 2, 5, width, height);
@@ -59,8 +59,8 @@ void Screen::number(int x, int y, std::int64_t value, Color foreground, Color ba
     text(x, y, std::to_string(value), foreground, background);
 }
 void Screen::canvasFill(int x, int y, int w, int h, Color background) {
-    for (int row = std::max(0, y); row < std::min(30, y + h); ++row)
-        for (int col = std::max(0, x); col < std::min(80, x + w); ++col)
+    for (int row = std::max(0, y); row < std::min(canvasHeight, y + h); ++row)
+        for (int col = std::max(0, x); col < std::min(canvasWidth, x + w); ++col)
             put(col, row, U' ', Theme::text, background);
 }
 void Screen::fill(int x, int y, int w, int h, Color background) {
@@ -102,7 +102,7 @@ void Screen::frame(int x, int y, int w, int h, Color foreground) {
         }
 }
 void Screen::panelText(int row, std::string_view value, Color foreground) {
-    clippedText(57, row + 5, value, foreground, Theme::background, 57, 5, panelWidth, panelHeight);
+    clippedText(panelX, row + fieldY, value, foreground, Theme::background, panelX, fieldY, panelWidth, panelHeight);
 }
 void Screen::panelNumber(int row, std::string_view label, std::int64_t value, Color foreground) {
     panelText(row, std::string(label) + " " + std::to_string(value), foreground);
@@ -110,23 +110,23 @@ void Screen::panelNumber(int row, std::string_view label, std::int64_t value, Co
 void Screen::flush() {
     std::string output;
     if (!initialized_) output = "\x1b[?1049h\x1b[?25l\x1b[?1003h\x1b[?1006h\x1b[2J";
-    for (int y = 0; y < 30; ++y) {
+    for (int y = 0; y < canvasHeight; ++y) {
         int x = 0;
-        while (x < 80) {
-            if ((x == 79 && y == 29) || (initialized_ && next_[y * 80 + x] == shown_[y * 80 + x])) { ++x; continue; }
-            const Pixel first = next_[y * 80 + x];
+        while (x < canvasWidth) {
+            if ((x == canvasWidth - 1 && y == canvasHeight - 1) || (initialized_ && next_[y * canvasWidth + x] == shown_[y * canvasWidth + x])) { ++x; continue; }
+            const Pixel first = next_[y * canvasWidth + x];
             char control[64];
             std::snprintf(control, sizeof(control), "\x1b[%d;%dH\x1b[38;5;%u;48;5;%um", y + 1, x + 1,
                           static_cast<unsigned>(first.foreground), static_cast<unsigned>(first.background));
             output += control;
             do {
-                utf8(output, next_[y * 80 + x].glyph);
-                shown_[y * 80 + x] = next_[y * 80 + x];
+                utf8(output, next_[y * canvasWidth + x].glyph);
+                shown_[y * canvasWidth + x] = next_[y * canvasWidth + x];
                 ++x;
-            } while (x < 80 && !(x == 79 && y == 29)
-                     && next_[y * 80 + x].foreground == first.foreground
-                     && next_[y * 80 + x].background == first.background
-                     && (!initialized_ || !(next_[y * 80 + x] == shown_[y * 80 + x])));
+            } while (x < canvasWidth && !(x == canvasWidth - 1 && y == canvasHeight - 1)
+                     && next_[y * canvasWidth + x].foreground == first.foreground
+                     && next_[y * canvasWidth + x].background == first.background
+                     && (!initialized_ || !(next_[y * canvasWidth + x] == shown_[y * canvasWidth + x])));
         }
     }
     initialized_ = true;
@@ -137,8 +137,8 @@ void Screen::flush() {
 }
 std::string Screen::plain() const {
     std::string result;
-    for (int y = 0; y < 30; ++y) {
-        for (int x = 0; x < 80; ++x) utf8(result, next_[y * 80 + x].glyph);
+    for (int y = 0; y < canvasHeight; ++y) {
+        for (int x = 0; x < canvasWidth; ++x) utf8(result, next_[y * canvasWidth + x].glyph);
         result += '\n';
     }
     return result;

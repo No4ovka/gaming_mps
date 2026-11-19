@@ -119,11 +119,11 @@ static void menuTests() {
     CHECK(tetris.starts == 2 && tetris.settings.seed == firstSeed && tetris.current.timeMs == 0);
     press(menu, InputType::PointerLeft, 2, 5);
     CHECK(tetris.last.x == 0 && tetris.last.y == 0);
-    press(menu, InputType::PointerRight, 53, 24);
-    CHECK(tetris.last.x == 51 && tetris.last.y == 19);
+    press(menu, InputType::PointerRight, 73, 34);
+    CHECK(tetris.last.x == 71 && tetris.last.y == 29);
     const auto clicks = tetris.handled;
-    press(menu, InputType::PointerLeft, 54, 24); CHECK(tetris.handled == clicks);
-    press(menu, InputType::PointerMove, 54, 24); CHECK(tetris.last.x == -1 && tetris.last.y == -1);
+    press(menu, InputType::PointerLeft, 74, 34); CHECK(tetris.handled == clicks);
+    press(menu, InputType::PointerMove, 74, 34); CHECK(tetris.last.x == -1 && tetris.last.y == -1);
     press(menu, InputType::Back); press(menu, InputType::Confirm);
     press(menu, InputType::Down); press(menu, InputType::Confirm);
     CHECK(tetris.settings.seed != firstSeed);
@@ -131,8 +131,8 @@ static void menuTests() {
     CHECK(view(menu).find("Партия окончена") != std::string::npos);
     press(menu, InputType::Back);
     press(menu, InputType::Down); press(menu, InputType::Confirm); // Mines settings.
-    press(menu, InputType::PointerLeft, 20, 12); // Click size: 8 -> 10.
-    press(menu, InputType::PointerLeft, 20, 16);
+    press(menu, InputType::PointerLeft, 30, 17); // Click size: 8 -> 10.
+    press(menu, InputType::PointerLeft, 30, 21);
     CHECK(mines.settings.level == 2);
     menu.update(0);
     mines.current.firstX = 3; mines.current.firstY = 4; mines.current.state = State::Won;
@@ -145,7 +145,7 @@ static void menuTests() {
     CHECK(mines.settings.level == 3 && mines.settings.seed == oldSeed + 0x9e3779b9u);
     CHECK(mines.settings.firstX == -1 && mines.settings.firstY == -1);
     press(menu, InputType::Back);
-    press(menu, InputType::PointerLeft, 20, 16); // Play by code.
+    press(menu, InputType::PointerLeft, 30, 21); // Play by code.
     CHECK(menu.textMode());
     for (char c : std::string("P1-041020-R00007-GNHM2B-ZZYZJ4")) {
         Input input; input.type = InputType::Text; input.character = c; menu.handle(input);
@@ -164,9 +164,9 @@ static void screenTests() {
     Screen screen(capture, &bytes);
     screen.begin();
     screen.text(-2, 0, "XXVISIBLE");
-    screen.text(52, 0, "OUTSIDE");
-    screen.panelText(20, "OUTSIDE");
-    screen.canvasText(79, 29, "OUTSIDE");
+    screen.text(72, 0, "OUTSIDE");
+    screen.panelText(30, "OUTSIDE");
+    screen.canvasText(99, 39, "OUTSIDE");
     CHECK(screen.plain().find("VISIBLE") != std::string::npos);
     CHECK(screen.plain().find("OUTSIDE") == std::string::npos);
     screen.flush(); CHECK(!bytes.empty()); bytes.clear(); screen.flush(); CHECK(bytes.empty());
@@ -174,7 +174,7 @@ static void screenTests() {
     Menu menu(tetris, mines, pong, seed);
     menu.draw(screen); const auto first = screen.plain(); screen.flush(); bytes.clear();
     menu.draw(screen); screen.flush(); CHECK(bytes.empty() && screen.plain() == first);
-    CHECK(Screen::boardX(16) == 10 && Screen::boardY(16) == 2);
+    CHECK(Screen::boardX(16) == 20 && Screen::boardY(16) == 7);
 }
 
 /** @brief Выполняет все проверки общей основы. */

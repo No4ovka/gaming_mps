@@ -27,7 +27,7 @@ void Stub::draw(Screen& screen) const {
                             pointer ? Theme::border : Theme::background, U'·');
             }
         screen.text(0, 0, "Проверка клеток и указателя", Theme::accent);
-        screen.text(0, 19, "Это сетка ввода, мины не сгенерированы", Theme::muted);
+        screen.text(0, Screen::height - 1, "Это сетка ввода, мины не сгенерированы", Theme::muted);
     } else {
         screen.text(5, 5, gameName(game_), Theme::accent);
         screen.text(5, 8, "Игра ещё не подключена");
